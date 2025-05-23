@@ -1,0 +1,36 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "cppbuild",
+			"label": "C/C++: gcc-13 build test",
+			"command": "/opt/homebrew/bin/gcc-13",
+			"args": [
+				"-std=c2x",
+				"-Wall",
+				"-Wextra",
+				"-Werror",
+				"-pedantic",
+				"-fdiagnostics-color=always",
+				"-O2",
+				"-ggdb",
+				"-I",
+				"include",
+				"-D",
+				"HYPHA_IP_UNIT_TEST=1",
+				"source/hypha_ip.c",
+				"test/hypha_test.c",
+				"-o",
+				"build/hypha_test"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build",
+			"detail": "compiler: /opt/homebrew/bin/gcc-13"
+		}
+	]
+}
