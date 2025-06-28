@@ -32,9 +32,9 @@ HYPHA_INTERNAL HyphaIpStatus_e HyphaIpIgmpPacket(HyphaIpContext_t context, Hypha
     context->statistics.frames.acquires++;
     // fill in an IGMP packet
     HyphaIpIgmpPacket_t igmp_packet = {
-        .type = HyphaIpIgmpTypeReport_v2,  // IGMPv2 Membership Report
-        .max_response_time = 0,            // not used in v1/v2, in deci-seconds
-        .checksum = 0,                     // will be computed later
+        .type = type,            // IGMPv2 Membership Report or Leave Group
+        .max_response_time = 0,  // not used in v1/v2, in deci-seconds
+        .checksum = 0,           // will be computed later
         .group = multicast,
     };
     // create a span over the IGMP packet

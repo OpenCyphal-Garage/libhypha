@@ -48,5 +48,6 @@ HyphaIpStatus_e HyphaIpArpProcessPacket(HyphaIpContext_t context, HyphaIpEtherne
     HyphaIpArpPacket_t arp_packet;
     HyphaIpCopyArpPacketFromFrame(&arp_packet, frame);
     // TODO deal with ARP, could require queueing up a send for later?
+    (void)timestamp;  // Suppress unused parameter warning
     return HyphaIpStatusNotImplemented;
 }

@@ -125,6 +125,6 @@ HyphaIpSpan_t HyphaIpSpanUdpHeader(HyphaIpEthernetFrame_t *frame) {
 HyphaIpSpan_t HyphaIpSpanUdpPayload(HyphaIpEthernetFrame_t *frame) {
     size_t offset = HyphaIpOffsetOfUpdDatagram();
     return (HyphaIpSpan_t){.pointer = &frame->payload[offset],
-                           .count = (sizeof(frame->payload) - offset) / sizeof(uint16_t),
+                           .count = (uint32_t)(sizeof(frame->payload) - offset) / sizeof(uint16_t),
                            .type = HyphaIpSpanTypeUint16_t};
 }

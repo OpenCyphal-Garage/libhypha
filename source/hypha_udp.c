@@ -26,7 +26,8 @@ HyphaIpStatus_e HyphaIpTransmitUdpDatagram(HyphaIpContext_t context, HyphaIpMeta
     do {
         size_t remaining = limit - offset;
         size_t chunk = (remaining <= HYPHA_IP_MAX_UDP_DATAGRAM_SIZE) ? remaining : HYPHA_IP_MAX_UDP_DATAGRAM_SIZE;
-        HyphaIpSpan_t fragment = {.pointer = &span.pointer[offset], .count = chunk, .type = HyphaIpSpanTypeUint8_t};
+        uint8_t* tmp = &((uint8_t*)span.pointer)[offset];
+        HyphaIpSpan_t fragment = {.pointer = tmp, .count = (uint32_t)chunk, .type = HyphaIpSpanTypeUint8_t};
         // acquire a frame which we will start to write all the information into
         HyphaIpEthernetFrame_t* frame = context->external.acquire(context->theirs);
         if (frame == nullptr) {
@@ -41,7 +42,7 @@ HyphaIpStatus_e HyphaIpTransmitUdpDatagram(HyphaIpContext_t context, HyphaIpMeta
         HyphaIpUdpHeader_t udp_header = {
             .source_port = metadata->source_port,
             .destination_port = metadata->destination_port,
-            .length = sizeof(HyphaIpUdpHeader_t) + HyphaIpSizeOfSpan(fragment),
+            .length = (uint16_t)(sizeof(HyphaIpUdpHeader_t) + HyphaIpSizeOfSpan(fragment)),
             .checksum = 0,
         };
         if (HYPHA_IP_USE_UDP_CHECKSUM) {
@@ -51,6 +52,7 @@ HyphaIpStatus_e HyphaIpTransmitUdpDatagram(HyphaIpContext_t context, HyphaIpMeta
                 .protocol = HyphaIpProtocol_UDP,
                 .length = udp_header.length,
             };
+            (void)pseudo_header;  // suppress unused variable warning
             // TODO compute the checksum
         }
         // copy the UDP header into the frame
@@ -148,6 +150,7 @@ HyphaIpStatus_e HyphaIpUdpReceiveDatagram(HyphaIpContext_t context, HyphaIpIPv4H
 }
 
 HyphaIpStatus_e HyphaIpPrepareUdpReceive(HyphaIpContext_t context, HyphaIpIPv4Address_t address, uint16_t port) {
+    (void)port;  // suppress unused parameter warning
     if (HyphaIpIsMulticastIPv4Address(address)) {
         // multicast address, we need to send a membership report
         return HyphaIpMembershipReport(context, address);
@@ -156,6 +159,8 @@ HyphaIpStatus_e HyphaIpPrepareUdpReceive(HyphaIpContext_t context, HyphaIpIPv4Ad
 }
 
 HyphaIpStatus_e HyphaIpPrepareUdpTransmit(HyphaIpContext_t context, HyphaIpIPv4Address_t address, uint16_t port) {
+    (void)context;  // suppress unused parameter warning
+    (void)port;     // suppress unused parameter warning
     if (HyphaIpIsMulticastIPv4Address(address)) {
         // nothing has to be done for multicast transmit
         return HyphaIpStatusOk;

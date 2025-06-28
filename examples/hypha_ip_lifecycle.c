@@ -1,10 +1,16 @@
 #include "hypha_ip/hypha_ip.h"
 
+/// ![Hypha IP External Context Example]
+/// @brief The following is what you need to define in order to use Hypha IP.
 struct HyphaIpExternalContext {
     // Define the structure of your external context here
-    int dummy;  ///< Placeholder for actual context data
+    // This would contain context you need for your Ethernet Driver
+    // a Time system, etc.
+    int dummy;  ///< [replace] Placeholder for actual context data so this will compile.
 };
+/// ![Hypha IP External Context Example]
 
+/// ![Hypha IP User Provided Definitions]
 void report(HyphaIpExternalContext_t mine, HyphaIpStatus_e status, const char *const func, unsigned int line) {
     (void)mine;    // Suppress unused parameter warning
     (void)status;  // Suppress unused parameter warning
@@ -62,22 +68,26 @@ HyphaIpExternalInterface_t externals = {.acquire = acquire,
                                         .get_monotonic_timestamp = get_timestamp,
                                         .report = report,
                                         .receive_udp = receive_udp};
+/// ![Hypha IP User Provided Definitions]
 
+/// ![Hypha IP Network Interface Example]
 HyphaIpNetworkInterface_t interface = {
     .mac = {{0x80, 0x90, 0xA0}, {0x12, 0x34, 0x56}},
     .address = {172, 16, 0, 42},
     .netmask = {255, 255, 255, 0},
     .gateway = {172, 16, 0, 1},
 };
+/// ![Hypha IP Network Interface Example]]
 
 HyphaIpContext_t context;
 
-// Define this yourself!
+// Statically allocated external context or can come from whatever allocator you need.
 struct HyphaIpExternalContext mine;
 
 int main(int argc, char *argv[argc]) {
     (void)argc;  // Suppress unused parameter warning
     (void)argv;  // Suppress unused parameter warning
+
     /// ![Hypha IP Lifecycle Example]
     // Initialize the Hypha IP context
     HyphaIpStatus_e status = HyphaIpInitialize(&context, &interface, &mine, &externals);
@@ -112,13 +122,15 @@ int main(int argc, char *argv[argc]) {
 
     // The main loop
     while (true) {
-        // Here you would typically handle incoming frames, process them, and respond as necessary.
+        // This will handle incoming frames, process them, and respond as necessary. It will call into
+        // the provided Receive functions when specific types are received.
         status = HyphaIpRunOnce(context);
         // check if the run was successful
 
         // Send whatever frames you want to send via the transmit function
         uint8_t data[42];  // <-- put whatever you want to send as a datagram here
         HyphaIpSpan_t datagram = {.pointer = data, .count = HYPHA_IP_DIMOF(data), .type = HyphaIpSpanTypeUint8_t};
+        // Define the metadata for the datagram
         HyphaIpMetaData_t metadata = {
             .source_address = interface.address,
             .destination_address = {239, 0, 0, 153},
@@ -126,12 +138,23 @@ int main(int argc, char *argv[argc]) {
             .destination_port = 9382,
             .timestamp = 0U,
         };
+        // Transmit UDP datagrams as needed
         status = HyphaIpTransmitUdpDatagram(context, &metadata, datagram);
         // check if the transmit was successful
+
+        /// @cond USE_ICMP
+#if defined(HYPHA_IP_USE_ICMP) || defined(HYPHA_IP_USE_ICMPv6)
+        // Transmit ICMP datagrams as needed
+        status = HyphaIpTransmitIcmpDatagram(context, HyphaIpIcmpTypeEchoRequest, 0, &metadata, datagram);
+#endif
+        /// @endcond
     }
 
+    // Once we are done, we can deinitialize the context
     status = HyphaIpDeinitialize(&context);
     // check if the deinitialization was successful
+
+    // Any context cleanup for the client context can be done here
 
     /// ![Hypha IP Lifecycle Example]
     return 0;  // Exit the program

@@ -69,7 +69,7 @@
 #ifndef HYPHA_IP_EXPIRATION_TIME
 /// The default expiration time for ARP and IP Filter entries in Timestamp_t units. If these were milliseconds this
 /// would be 31.7 years.
-#define HYPHA_IP_EXPIRATION_TIME 1'000'000'000'000U
+#define HYPHA_IP_EXPIRATION_TIME (HyphaIpTimestamp_t)1'000'000'000'000U
 #endif
 
 static_assert(HYPHA_IP_MTU >= 64U, "The MTU must be greater than 64 bytes");

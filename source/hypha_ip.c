@@ -31,7 +31,7 @@ const HyphaIpIPv4Address_t hypha_ip_igmpv2 = {224, 0, 0, 2};
 const HyphaIpIPv4Address_t hypha_ip_igmpv3 = {224, 0, 0, 22};
 
 uint32_t HyphaIpIPv4AddressToValue(HyphaIpIPv4Address_t ipv4) {
-    return (ipv4.a << 24) | (ipv4.b << 16) | (ipv4.c << 8) | ipv4.d;
+    return (uint32_t)(ipv4.a << 24) | (uint32_t)(ipv4.b << 16) | (uint32_t)(ipv4.c << 8) | (uint32_t)(ipv4.d);
 }
 
 HyphaIpIPv4Address_t HyphaIpValueToIPv4Address(uint32_t value) {
@@ -308,7 +308,7 @@ HyphaIpStatus_e HyphaIpIPv4TransmitPacket(HyphaIpContext_t context, HyphaIpEther
         .IHL = 5,  // no options are supported, so the header length is 5 * sizeof(uint32_t) = 20 bytes
         .DSCP = 0,
         .ECN = 0,
-        .length = sizeof(HyphaIpIPv4Header_t) + HyphaIpSizeOfSpan(packet),
+        .length = (uint16_t)(sizeof(HyphaIpIPv4Header_t) + (uint16_t)HyphaIpSizeOfSpan(packet)),
         .identification = 0,  // no fragmentation, so ID is 0
         .zero = 0,
         .DF = 0,
