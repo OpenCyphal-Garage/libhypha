@@ -1,0 +1,21 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Hypha IP Documentation Build",
+			"type": "shell",
+			"command": "doxygen",
+			"args": [
+				"${workspaceFolder}/documentation/Doxyfile"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"detail": "Build Hypha IP Documentation"
+		}
+	]
+}
