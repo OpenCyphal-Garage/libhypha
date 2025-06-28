@@ -24,22 +24,9 @@
         "stack": "c",
         "string.h": "c",
         "hypha_internal.h": "c",
-        "hypha_ip.h": "c"
+        "hypha_ip.h": "c",
+        "stdio.h": "c"
     },
-    "cSpell.words": [
-        "DIMOF",
-        "Doxyfile",
-        "false",
-        "Hypha",
-        "hyphaip",
-        "ICMP",
-        "IGMP",
-        "IP",
-        "libudpard",
-        "nullptr",
-        "true",
-        "UDP"
-    ],
     "cSpell.enabledFileTypes": {
         "*.c": true,
         "*.h": true,
@@ -48,12 +35,18 @@
     "C_Cpp.default.compileCommands": [
         "build/compile_commands.json",
     ],
-    "C_Cpp.default.cStandard": "c23",
-    "C_Cpp.default.includePath": [
-        "${workspaceFolder}/include"
-    ],
     "C_Cpp.formatting": "clangFormat",
     "C_Cpp.doxygen.generatedStyle": "/*!",
     "C_Cpp.codeAnalysis.clangTidy.enabled": true,
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "cSpell.customDictionaries": {
+        "project-words": {
+            "name": "project-words",
+            "path": "${workspaceRoot}/documentation/dictionary.txt",
+            "description": "Words used in this project",
+            "addWords": true
+        },
+        "custom": true, // Enable the `custom` dictionary
+        "internal-terms": false // Disable the `internal-terms` dictionary
+    }
 }

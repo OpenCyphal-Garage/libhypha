@@ -2,35 +2,20 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"type": "cppbuild",
-			"label": "C/C++: gcc-13 build test",
-			"command": "/opt/homebrew/bin/gcc-13",
+			"label": "Hypha IP Documentation Build",
+			"type": "shell",
+			"command": "doxygen",
 			"args": [
-				"-std=c2x",
-				"-Wall",
-				"-Wextra",
-				"-Werror",
-				"-pedantic",
-				"-fdiagnostics-color=always",
-				"-O2",
-				"-ggdb",
-				"-I",
-				"include",
-				"-D",
-				"HYPHA_IP_UNIT_TEST=1",
-				"source/hypha_ip.c",
-				"test/hypha_test.c",
-				"-o",
-				"build/hypha_test"
+				"${workspaceFolder}/documentation/Doxyfile"
 			],
-			"options": {
-				"cwd": "${workspaceFolder}"
+			"group": {
+				"kind": "build",
+				"isDefault": true
 			},
 			"problemMatcher": [
 				"$gcc"
 			],
-			"group": "build",
-			"detail": "compiler: /opt/homebrew/bin/gcc-13"
+			"detail": "Build Hypha IP Documentation"
 		}
 	]
 }

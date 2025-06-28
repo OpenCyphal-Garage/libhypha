@@ -8,8 +8,10 @@
             "name": "Hypha IP Test (lldb) Launch",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/hypha_ip_test",
-            "args": [],
+            "program": "${cmake.testProgram}",
+            "args": [
+                "${cmake.testArgs}"
+            ],
             "cwd": "${workspaceFolder}"
         }
     ]

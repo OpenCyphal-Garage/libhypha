@@ -72,7 +72,7 @@ cmake --build build --target test
 
 ```bash
 doxygen documentation/Doxyfile
-open
+open build/documentation/html/index.html
 ```
 
 ## References

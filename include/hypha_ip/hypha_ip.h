@@ -6,18 +6,11 @@
 /// The main include file for the Hypha IP stack. This includes all the
 /// definitions and structures necessary to use the stack.
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-
-#include "assert.h"
-#include "inttypes.h"
-#include "stdbool.h"
-#include "stddef.h"
-#include "stdint.h"
-#include "stdio.h"
-#include "stdlib.h"
-#include "string.h"
-
-//-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-/// @section CodingPolicy Coding Policy
+/// @page HighLevel High Level Overview
+/// @section Example Lifecycle
+/// @snippet examples/hypha_ip_lifecycle.c Hypha IP Lifecycle Example
+/// @page CodingPolicy Coding Policy
+/// @section General General
 /// <ol>
 /// <li>Use stdint.h. Don't reinvent these types.
 /// <li>_t for mainly struct types
@@ -27,7 +20,18 @@
 /// <li>Typedef all structures, "struct Name" does not have _t, the typedef does.
 /// <li>All things must be namespaced: using HyphaIp, hypha_ip or HYPHA_IP
 /// </ol>
+/// @section MISRA MISRA
+/// Currently we are unevaluated for MISRA compliance.
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+#include "assert.h"
+#include "inttypes.h"
+#include "stdbool.h"
+#include "stddef.h"
+#include "stdint.h"
+#include "stdio.h"
+#include "stdlib.h"
+#include "string.h"
 
 /// The 802.3 Ethernet defined types for EtherTypes in MAC headers.
 typedef enum HyphaIpEtherType : uint16_t {
@@ -64,6 +68,7 @@ typedef enum HyphaIpEtherType : uint16_t {
 #endif
 
 #ifndef HYPHA_IP_VLAN_ID
+/// The VLAN ID to use in the Hypha IP stack.
 #define HYPHA_IP_VLAN_ID 1
 #endif
 
@@ -103,7 +108,7 @@ static_assert(sizeof(HyphaIpEthernetHeader_t) == 14U, "Must be exactly this size
 #endif
 
 /// The maximum size of an Ethernet frame payload
-#define HYPHA_IP_MAX_ETHERNET_FRAME_SIZE (HYPHA_IP_MTU - sizeof(HyphaIpEthernetHeader_t))
+#define HYPHA_IP_MAX_ETHERNET_FRAME_SIZE (HYPHA_IP_MTU)
 
 /// The 802.3 header and payload
 /// @note CRC32 is assumed to be handled by the Peripheral/Hardware
@@ -113,7 +118,8 @@ typedef struct HyphaIpEthernetFrame {
     /// The payload of the Ethernet Frame. Contains the IP header, the UDP header and so forth.
     uint8_t payload[HYPHA_IP_MAX_ETHERNET_FRAME_SIZE];
 } HyphaIpEthernetFrame_t;
-static_assert(sizeof(HyphaIpEthernetFrame_t) <= HYPHA_IP_MTU, "Must fit in a single MTU");
+static_assert(sizeof(HyphaIpEthernetFrame_t) == HYPHA_IP_MTU + sizeof(HyphaIpEthernetHeader_t),
+              "Must fit a whole single MTU");
 
 /// The IPv4 Address in Network Order
 typedef struct HyphaIpIPv4Address {
@@ -211,7 +217,7 @@ extern const HyphaIpIPv4Address_t hypha_ip_class_a_mask;
 /// The default IPv4 netmask for Class B networks
 extern const HyphaIpIPv4Address_t hypha_ip_class_b_mask;
 
-// The default IPv4 netmask for Class C networks
+/// The default IPv4 netmask for Class C networks
 extern const HyphaIpIPv4Address_t hypha_ip_class_c_mask;
 
 /// The default IPv4 address for the local host
@@ -574,7 +580,7 @@ HyphaIpEthernetAddress_t HyphaIpFindEthernetAddress(HyphaIpContext_t context, Hy
 
 /// Allows Clients to pre-populate the ARP table with matches.
 /// @warning This will enable the ARP table, and all ARP requests will be answered, regardless of
-/// @ref HYPHA_IP_USE_ARP_TABLE.
+/// @ref HYPHA_IP_USE_ARP_CACHE.
 /// @param[in] context The opaque context
 /// @param[in] len The number of matches
 /// @param[in] matches The array of matches
@@ -592,9 +598,9 @@ HyphaIpStatus_e HyphaIpPopulateArpTable(HyphaIpContext_t context, size_t len, Hy
 HyphaIpStatus_e HyphaIpPopulateEthernetFilter(HyphaIpContext_t context, size_t len,
                                               HyphaIpEthernetAddress_t filters[len]);
 
-/// @brief Populates entries in the software IPv4 Filter.
+/// @brief Populates entries in the software IPv4 Allow Filter. A
 /// @warning By calling this, the IPv4 Filter will be enabled, and all IPv4 packets will be filtered, regardless of
-/// @ref HYPHA_IP_USE_IP_FILTER.
+/// @ref HYPHA_IP_USE_IP_FILTER. Anything not in the filter will be dropped.
 /// @param context The opaque context
 /// @param len The number of entries in the provided filter.
 /// @param filters The array of IPv4 addresses to filter on.
@@ -602,11 +608,12 @@ HyphaIpStatus_e HyphaIpPopulateEthernetFilter(HyphaIpContext_t context, size_t l
 HyphaIpStatus_e HyphaIpPopulateIPv4Filter(HyphaIpContext_t context, size_t len, HyphaIpIPv4Address_t filters[len]);
 
 /// Runs the Hypha IP Stack once, Receiving and then Transmitting.
+/// @note This will not block and will try to receive a single frame then return.
 /// @param[in] context The opaque context
 /// @return The status of the operation
 HyphaIpStatus_e HyphaIpRunOnce(HyphaIpContext_t context);
 
-/// Transmits a UDP Datagram
+/// Transmits a UDP Datagram now. This will not enqueue or wait until later or do the work in the @ref HyphaIpRunOnce.
 /// @param[in] context The opaque context
 /// @param[in] metadata The metadata of the datagram
 /// @param[in] datagram The UDP Datagram

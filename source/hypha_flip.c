@@ -6,10 +6,11 @@
 #include <string.h>
 
 #include "hypha_ip/hypha_internal.h"
-size_t HyphaIpFlipCopy(size_t numflip_units, HyphaIpFlipUnit_t const flip_units[numflip_units], void *destination,
+
+size_t HyphaIpFlipCopy(size_t num_flip_units, HyphaIpFlipUnit_t const flip_units[num_flip_units], void *destination,
                        void const *source) {
     size_t bytes = 0U;
-    for (size_t u = 0U; u < numflip_units; u++) {
+    for (size_t u = 0U; u < num_flip_units; u++) {
         if (flip_units[u].bytes == sizeof(uint8_t)) {
             uint8_t *dst = (uint8_t *)destination;
             uint8_t *src = (uint8_t *)source;

@@ -497,7 +497,7 @@ typedef struct HyphaIpFlipUnit {
 /// @brief Copies memory from source to destination, flipping the bytes according to the flip_units.
 /// This is used to handle endianness and byte order issues in network protocols.
 /// The flip_units array defines how many bytes to flip and how many units to copy.
-/// @param numflip_units the number of flip units in the array
+/// @param num_flip_units the number of flip units in the array
 /// @param flip_units The array of flip units, each defining how many bytes to flip and how many units to
 /// copy.
 /// @param destination the destination pointer where the flipped data will be copied

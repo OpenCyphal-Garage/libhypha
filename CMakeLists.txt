@@ -80,5 +80,13 @@ target_include_directories(hypha_ip_test PRIVATE
 target_link_libraries(hypha_ip_test PRIVATE lib-hypha-ip unity)
 target_link_libraries(hypha_ip_test INTERFACE  hypha_ip_defs hypha_ip_rules)
 add_test(NAME hypha_ip_test COMMAND hypha_ip_test)
+
+###############################################################
+# Example Application
+###############################################################
+add_executable(hypha_ip_example
+    ${CMAKE_SOURCE_DIR}/examples/hypha_ip_lifecycle.c
+)
+target_link_libraries(hypha_ip_example PRIVATE lib-hypha-ip)
 endif()
 
