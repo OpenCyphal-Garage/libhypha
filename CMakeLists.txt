@@ -166,7 +166,7 @@ if (BUILD_COVERAGE)
 
         # set(LLVM_PROFILE_FILE "${TARGET}.profraw")
         add_custom_target(coverage-${ARG_TARGET}
-            DEPENDS ${ARG_TARGET} test
+            DEPENDS ${ARG_TARGET}
             COMMAND ${LLVM_PROFDATA} merge -sparse $<TARGET_FILE:${ARG_TARGET}>.profraw -o $<TARGET_FILE:${ARG_TARGET}>.profdata
             COMMAND ${LLVM_COV} show   $<TARGET_FILE:${ARG_TARGET}> --color --sources ${LIBRARIES_SOURCES} -instr-profile=$<TARGET_FILE:${ARG_TARGET}>.profdata --format=html -output-dir=${CMAKE_BINARY_DIR}/coverage/coverage-${ARG_TARGET}
             COMMAND ${LLVM_COV} report $<TARGET_FILE:${ARG_TARGET}> --color --sources ${LIBRARIES_SOURCES} -instr-profile=$<TARGET_FILE:${ARG_TARGET}>.profdata
@@ -174,6 +174,10 @@ if (BUILD_COVERAGE)
             COMMAND ${GENHTML} $<TARGET_FILE:${ARG_TARGET}>.info -o ${CMAKE_BINARY_DIR}/coverage/coverage-${ARG_TARGET}
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         )
+        if (NOT TARGET coverage)
+            add_custom_target(coverage)
+        endif()
+        add_dependencies(coverage coverage-${ARG_TARGET})
     endfunction()
 
     coverage_target(TARGET hypha_ip_test
