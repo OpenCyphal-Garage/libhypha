@@ -11,10 +11,12 @@ struct HyphaIpExternalContext {
 /// ![Hypha IP External Context Example]
 
 /// ![Hypha IP User Provided Definitions]
-void report(HyphaIpExternalContext_t mine, HyphaIpStatus_e status, const char *const func, unsigned int line) {
+void report(HyphaIpExternalContext_t mine, HyphaIpStatus_e status, const char *const func, const char *const file,
+            unsigned int line) {
     (void)mine;    // Suppress unused parameter warning
     (void)status;  // Suppress unused parameter warning
     (void)func;    // Suppress unused parameter warning
+    (void)file;    // Suppress unused parameter warning
     (void)line;    // Suppress unused parameter warning
     return;
 }

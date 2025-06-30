@@ -6,7 +6,7 @@
 
 bool HyphaIpSpanIsEmpty(HyphaIpSpan_t span) { return (span.count == 0U); }
 
-size_t HyphaIpSizeOfSpan(HyphaIpSpan_t span) {
+size_t HyphaIpSpanSize(HyphaIpSpan_t span) {
     size_t bytes = 0U;
     switch (span.type) {
         case HyphaIpSpanTypeUndefined: {
@@ -81,9 +81,7 @@ void HyphaIpSpanPrint(HyphaIpContext_t context, HyphaIpSpan_t span) {
     void *pointer = span.pointer;
     size_t count = span.count;
     int type = span.type;
-    if (context->external.print) {
-        context->external.print(context->theirs, "" PRIuSpan "\r\n", pointer, count, type);
-    }
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelInfo, HyphaIpPrintLayerUnknown, "" PRIuSpan "\r\n", pointer, count, type);
     switch (span.type) {
         case HyphaIpSpanTypeUint8_t: {
             uint8_t *tmp = (uint8_t *)pointer;
@@ -116,15 +114,30 @@ HyphaIpSpan_t HyphaIpSpanIpHeader(HyphaIpEthernetFrame_t *frame) {
 }
 
 HyphaIpSpan_t HyphaIpSpanUdpHeader(HyphaIpEthernetFrame_t *frame) {
-    size_t offset = HyphaIpOffsetOfUpdHeader();
+    size_t offset = HyphaIpOffsetOfUDPHeader();
     return (HyphaIpSpan_t){.pointer = &frame->payload[offset],
-                           .count = sizeof(HyphaIpUdpHeader_t) / sizeof(uint16_t),
+                           .count = sizeof(HyphaIpUDPHeader_t) / sizeof(uint16_t),
                            .type = HyphaIpSpanTypeUint16_t};
 }
 
+HyphaIpSpan_t HyphaIpSpanUdpDatagram(HyphaIpEthernetFrame_t *frame) {
+    size_t offset = HyphaIpOffsetOfUDPHeader();
+    size_t length = (sizeof(frame->payload) - offset) / sizeof(uint16_t);
+    return (HyphaIpSpan_t){
+        .pointer = &frame->payload[offset], .count = (uint32_t)length, .type = HyphaIpSpanTypeUint16_t};
+}
+
 HyphaIpSpan_t HyphaIpSpanUdpPayload(HyphaIpEthernetFrame_t *frame) {
-    size_t offset = HyphaIpOffsetOfUpdDatagram();
-    return (HyphaIpSpan_t){.pointer = &frame->payload[offset],
-                           .count = (uint32_t)(sizeof(frame->payload) - offset) / sizeof(uint16_t),
-                           .type = HyphaIpSpanTypeUint16_t};
+    size_t offset = HyphaIpOffsetOfUDPPayload();
+    size_t length = (sizeof(frame->payload) - offset) / sizeof(uint16_t);
+    return (HyphaIpSpan_t){
+        .pointer = &frame->payload[offset], .count = (uint32_t)length, .type = HyphaIpSpanTypeUint16_t};
+}
+
+bool HyphaIpSpanResize(HyphaIpSpan_t *span, uint32_t new_size) {
+    if (new_size > span->count) {
+        return false;  // Cannot resize to a larger size
+    }
+    span->count = (uint32_t)new_size;
+    return true;
 }

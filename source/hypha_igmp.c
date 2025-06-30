@@ -15,18 +15,17 @@ HYPHA_INTERNAL HyphaIpStatus_e HyphaIpIgmpPacket(HyphaIpContext_t context, Hypha
     if (context == nullptr) {
         return HyphaIpStatusInvalidContext;
     }
-    HyphaIpPrinter_f printer = context->external.print;
-    if (printer) {
-        printer(context->theirs, "IGMP Group: " PRIuIPv4Address "\r\n", multicast.a, multicast.b, multicast.c,
-                multicast.d);
-    }
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerIGMP,
+                   "Sending IGMP Packet: Type %u for group " PRIuIPv4Address "\r\n", type, multicast.a, multicast.b,
+                   multicast.c, multicast.d);
+
     HyphaIpStatus_e status = HyphaIpStatusOk;
     // acquire a frame for the IGMP packet
     HyphaIpEthernetFrame_t *frame = context->external.acquire(context->theirs);
     if (frame == nullptr) {
         context->statistics.frames.failures++;
         status = HyphaIpStatusOutOfMemory;
-        context->external.report(context->theirs, status, __func__, __LINE__);
+        HYPHA_IP_REPORT(context, status);
         return status;
     }
     context->statistics.frames.acquires++;
@@ -62,15 +61,15 @@ HYPHA_INTERNAL HyphaIpStatus_e HyphaIpIgmpPacket(HyphaIpContext_t context, Hypha
     };
     // let the lower layer no figure out the ethernet stuff
     status = HyphaIpIPv4TransmitPacket(context, frame, &metadata, HyphaIpProtocol_IGMP, igmp_span);
-    context->external.report(context->theirs, status, __func__, __LINE__);
-    if (printer) {
-        if (HyphaIpIsSuccess(status)) {
-            printer(context->theirs, "IGMP Membership Report sent successfully\r\n");
-        }
+    HYPHA_IP_REPORT(context, status);
+    if (HyphaIpIsFailure(status)) {
+        HYPHA_IP_PRINT(context, HyphaIpPrintLevelError, HyphaIpPrintLayerIGMP,
+                       "IGMP Membership Report failed to send %u\r\n", status);
+        context->statistics.igmp.rejected++;
     }
     // now free the frame
     status = context->external.release(context->theirs, frame);
-    context->external.report(context->theirs, status, __func__, __LINE__);
+    HYPHA_IP_REPORT(context, status);
     if (HyphaIpIsSuccess(status)) {
         context->statistics.frames.releases++;
     } else {

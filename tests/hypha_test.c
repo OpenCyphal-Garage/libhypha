@@ -9,7 +9,11 @@
 #include "string.h"
 #include "unity.h"
 
+HyphaIpContext_t context;
+
 char const *boolean(bool value) { return value ? "true" : "false"; }
+
+#define ANNOUNCE printf("In %s @ file %s:%u\r\n", __func__, __FILE__, __LINE__)
 
 /// We, the client, must define this
 struct HyphaIpExternalContext {
@@ -26,17 +30,18 @@ bool expected_receive_udp;
 bool actual_receive_udp;
 HyphaIpEthernetFrame_t *expected_frame;
 
-void report(HyphaIpExternalContext_t mine, HyphaIpStatus_e status, const char *const func, unsigned int line) {
+void report(HyphaIpExternalContext_t mine, HyphaIpStatus_e status, const char *const func, const char *const file,
+            unsigned int line) {
     TEST_ASSERT_NOT_NULL(mine);
     if (status != HyphaIpStatusOk) {
-        printf("%p Error %d in %s:%u\r\n", (void *)mine, (int)status, func, line);
+        printf("[TEST] %p Error %d in %s @ %s:%u\r\n", (void *)mine, (int)status, func, file, line);
     }
     TEST_ASSERT_EQUAL(expected_status, status);
 }
 
-HyphaIpTimestamp_t get_timestamp(HyphaIpExternalContext_t context) {
-    TEST_ASSERT_NOT_NULL(context);
-    return ++context->timestamp;
+HyphaIpTimestamp_t get_timestamp(HyphaIpExternalContext_t mine) {
+    TEST_ASSERT_NOT_NULL(mine);
+    return ++mine->timestamp;
 }
 
 HyphaIpEthernetFrame_t *acquire(HyphaIpExternalContext_t mine) {
@@ -53,7 +58,7 @@ HyphaIpStatus_e release(HyphaIpExternalContext_t mine, HyphaIpEthernetFrame_t *f
     return HyphaIpStatusOk;
 }
 
-unsigned char test_frame[] = {
+uint8_t const test_frame[] = {
     0x01, 0x00, 0x5e, 0x00, 0x00, 0x9b,  // mac (6 bytes)
     0x80, 0x90, 0xa0, 0x12, 0x34, 0x56,  // mac (6 bytes)
 #if (HYPHA_IP_USE_VLAN == 1)
@@ -75,11 +80,8 @@ unsigned char test_frame[] = {
     0x54, 0x0f, 0x30, 0x59                                                               // CRC32 (last 4)
 };
 
-#if (HYPHA_IP_USE_VLAN == 1)
-#define HYPHA_IP_PAYLOAD_OFFSET 46
-#else
-#define HYPHA_IP_PAYLOAD_OFFSET 42
-#endif
+size_t const HYPHA_IP_UDP_PAYLOAD_OFFSET =
+    (sizeof(HyphaIpEthernetHeader_t) + sizeof(HyphaIpIPv4Header_t) + sizeof(HyphaIpUDPHeader_t));
 
 void hyphaip_expected_test_values() {
     HyphaIpIPv4Address_t source = {172, 16, 0, 7};
@@ -88,8 +90,8 @@ void hyphaip_expected_test_values() {
     expected_metadata.destination_address = destination;
     expected_metadata.source_port = 1025;
     expected_metadata.destination_port = 9382;
-    expected_payload.pointer = &test_frame[HYPHA_IP_PAYLOAD_OFFSET];
-    expected_payload.count = sizeof(test_frame) - HYPHA_IP_PAYLOAD_OFFSET;
+    expected_payload.pointer = (void *)&test_frame[HYPHA_IP_UDP_PAYLOAD_OFFSET];
+    expected_payload.count = sizeof(test_frame) - HYPHA_IP_UDP_PAYLOAD_OFFSET;
     expected_payload.type = HyphaIpSpanTypeUint8_t;
     expected_ethernet_destination_address = (HyphaIpEthernetAddress_t){{0x01, 0x00, 0x5e}, {0x00, 0x00, 0x9b}};
     expected_ethernet_source_address = (HyphaIpEthernetAddress_t){{0x80, 0x90, 0xa0}, {0x12, 0x34, 0x56}};
@@ -104,14 +106,14 @@ HyphaIpStatus_e receive(HyphaIpExternalContext_t mine, HyphaIpEthernetFrame_t *f
     TEST_ASSERT_NOT_NULL(frame);
     // TODO make a bunch more frames and send them in
     memcpy(frame, test_frame, sizeof(test_frame));
-    printf("Receiving frame %p\r\n", (void *)frame);
+    printf("[TEST] Receiving frame %p\r\n", (void *)frame);
     return HyphaIpStatusOk;
 }
 
 HyphaIpStatus_e transmit(HyphaIpExternalContext_t mine, HyphaIpEthernetFrame_t *frame) {
     TEST_ASSERT_NOT_NULL(mine);
     TEST_ASSERT_NOT_NULL(frame);
-    printf("Transmitting frame %p\r\n", (void *)frame);
+    printf("[TEST] Transmitting frame %p\r\n", (void *)frame);
     // verify that the ETH header is right
     TEST_ASSERT_EQUAL_MEMORY(&expected_ethernet_destination_address, &frame->header.destination,
                              sizeof(HyphaIpEthernetAddress_t));
@@ -119,7 +121,7 @@ HyphaIpStatus_e transmit(HyphaIpExternalContext_t mine, HyphaIpEthernetFrame_t *
                              sizeof(HyphaIpEthernetAddress_t));
     TEST_ASSERT_EQUAL(expected_reversed_ethertype, frame->header.type);  // reversed
     // TODO verify that the IP header is right
-    // TODO verify that the UDP header is right
+    // TODO verify that the UDP header is right, if it's got UDP, could be IGMP or ICMP
     return HyphaIpStatusOk;
 }
 
@@ -128,7 +130,7 @@ HyphaIpStatus_e receive_udp(HyphaIpExternalContext_t mine, HyphaIpMetaData_t *me
     TEST_ASSERT_NOT_NULL(meta);
     TEST_ASSERT_NOT_NULL(span.pointer);
     TEST_ASSERT_NOT_EQUAL(0, span.count);  // this may be empty
-    printf("Receiving UDP @ %llu ms from " PRIuIPv4Address ":%" PRIu16 " to " PRIuIPv4Address ":%" PRIu16
+    printf("[TEST] Receiving UDP @ %llu ms from " PRIuIPv4Address ":%" PRIu16 " to " PRIuIPv4Address ":%" PRIu16
            " Span " PRIuSpan "\r\n",
            meta->timestamp, meta->source_address.a, meta->source_address.b, meta->source_address.c,
            meta->source_address.d, meta->source_port, meta->destination_address.a, meta->destination_address.b,
@@ -146,7 +148,17 @@ HyphaIpStatus_e receive_udp(HyphaIpExternalContext_t mine, HyphaIpMetaData_t *me
     TEST_ASSERT_EQUAL(expected_metadata.destination_port, meta->destination_port);
 
     // verify that the bytes to the payload are the expected ones
-    TEST_ASSERT_EQUAL_MEMORY(expected_payload.pointer, span.pointer, span.count);
+    TEST_ASSERT_EQUAL(expected_payload.count, span.count);
+    TEST_ASSERT_EQUAL(42, HyphaIpSpanSize(span));  // 42 is the size of the payload in the test frame
+    TEST_ASSERT_EQUAL(expected_payload.type, span.type);
+    // Print the payload for debugging
+    printf("[TEST] Expected payload:\r\n");
+    HyphaIpSpanPrint(context, expected_payload);
+    printf("[TEST] Actual payload:\r\n");
+    HyphaIpSpanPrint(context, span);
+    // TEST_ASSERT_EQUAL_PTR(expected_payload.pointer, span.pointer); // This won't be true because the pointer is not
+    // the same
+    TEST_ASSERT_EQUAL_MEMORY(expected_payload.pointer, span.pointer, HyphaIpSpanSize(span));
     actual_receive_udp = true;
     return HyphaIpStatusOk;
 }
@@ -186,7 +198,6 @@ bool use_prepopulated_arp = false;
 bool use_prepare_multicast = false;
 bool use_prepopulated_ip_filter = false;
 
-HyphaIpContext_t context;
 struct HyphaIpExternalContext mine;
 
 void hyphaip_setUp(void) {
@@ -232,6 +243,70 @@ void hyphaip_tearDown(void) {
     if (bad_setup_passed == true) {
         use_good_setup = true;
     }
+}
+
+void hyphaip_test_Constants(void) {
+    // Test the constants defined in hypha_ip.h
+    TEST_ASSERT_EQUAL(HYPHA_IP_MTU, HyphaIpGetCompiledMTU());
+    TEST_ASSERT_EQUAL(HYPHA_IP_TTL, HyphaIpGetCompiledTTL());
+    TEST_ASSERT_EQUAL(HYPHA_IP_VLAN_ID, HyphaIpGetCompiledVLANID());
+    TEST_ASSERT_TRUE(HyphaIpGetCompiledIPv4Filtering());
+
+    TEST_ASSERT_TRUE(HyphaIpIsSuccess(HyphaIpStatusOk));
+    TEST_ASSERT_TRUE(HyphaIpIsFailure(HyphaIpStatusFailure));
+
+    HyphaIpIPv4Address_t addr = HyphaIpValueToIPv4Address(0x7f000001);
+    TEST_ASSERT_EQUAL_MEMORY_ARRAY(&hypha_ip_localhost, &addr, sizeof(HyphaIpIPv4Address_t), 1);
+}
+
+void hyphaip_test_Span(void) {
+    // Test the HyphaIpSpan_t structure and its functions
+    HyphaIpSpan_t empty = HYPHA_IP_DEFAULT_SPAN;
+    TEST_ASSERT_EQUAL(0, empty.count);
+    TEST_ASSERT_NULL(empty.pointer);
+    TEST_ASSERT_EQUAL(HyphaIpSpanTypeUndefined, empty.type);
+
+    // Basic Span
+    uint8_t test_data[] = {0x01, 0x02, 0x03, 0x04};
+    HyphaIpSpan_t span = {
+        .pointer = test_data,
+        .count = HYPHA_IP_DIMOF(test_data),
+        .type = HyphaIpSpanTypeUint8_t,
+    };
+    TEST_ASSERT_EQUAL(HYPHA_IP_DIMOF(test_data), span.count);
+    TEST_ASSERT_EQUAL(HyphaIpSpanTypeUint8_t, span.type);
+    TEST_ASSERT_EQUAL_MEMORY(test_data, span.pointer, HYPHA_IP_DIMOF(test_data));
+
+    // a Test frame
+    HyphaIpEthernetFrame_t frame = {0};
+
+    // Span for UDP Header
+    HyphaIpSpan_t udp_header = HyphaIpSpanUdpHeader(&frame);
+    TEST_ASSERT_NOT_NULL(udp_header.pointer);
+    TEST_ASSERT_EQUAL(sizeof(HyphaIpUDPHeader_t) / sizeof(uint16_t), udp_header.count);
+    TEST_ASSERT_EQUAL(HyphaIpSpanTypeUint16_t, udp_header.type);
+    TEST_ASSERT_EQUAL(sizeof(HyphaIpUDPHeader_t), HyphaIpSpanSize(udp_header));
+
+    // Span for UDP Datagram
+    HyphaIpSpan_t udp_payload = HyphaIpSpanUdpPayload(&frame);
+    TEST_ASSERT_NOT_NULL(udp_payload.pointer);
+    TEST_ASSERT_EQUAL(HYPHA_IP_MAX_UDP_PAYLOAD_SIZE / sizeof(uint16_t), udp_payload.count);
+    TEST_ASSERT_EQUAL(HyphaIpSpanTypeUint16_t, udp_payload.type);
+    TEST_ASSERT_EQUAL(HYPHA_IP_MAX_UDP_PAYLOAD_SIZE, HyphaIpSpanSize(udp_payload));
+
+    // Resize the Span
+    uint32_t new_size = 8;  // Resize to 8 uint16_ts
+    bool resized = HyphaIpSpanResize(&udp_payload, new_size);
+    TEST_ASSERT_TRUE(resized);
+    TEST_ASSERT_EQUAL(new_size, udp_payload.count);
+    TEST_ASSERT_EQUAL(HyphaIpSpanTypeUint16_t, udp_payload.type);
+    TEST_ASSERT_EQUAL(16, HyphaIpSpanSize(udp_payload));
+
+    new_size = 16;  // Try to resize to a larger size
+    resized = HyphaIpSpanResize(&udp_payload, new_size);
+    TEST_ASSERT_FALSE(resized);               // Should fail since we can't resize to a larger size
+    TEST_ASSERT_EQUAL(8, udp_payload.count);  // Should still be 8
+    TEST_ASSERT_EQUAL(16, HyphaIpSpanSize(udp_payload));
 }
 
 void hyphaip_test_NormalChecksum(void) {
@@ -455,6 +530,25 @@ void hyphaip_test_ConvertMulticast(void) {
     TEST_ASSERT_EQUAL_MEMORY(&mac, &expected, 6);
 }
 
+void hyphaip_test_CheckOffsets(void) {
+    // we're going to check to make sure the assumptions about the offsets in the structures are correct
+    HyphaIpEthernetFrame_t frame;
+    size_t frame_length = sizeof(test_frame);
+    memset(&frame, 0, sizeof(frame));
+    memcpy(&frame, test_frame, frame_length);
+    printf("[TEST] Frame length: %zu\r\n", frame_length);
+    TEST_ASSERT_EQUAL_MEMORY(&frame, &test_frame[0], frame_length);
+    // Offsets within the Ethernet frame, not the test_frame array
+    TEST_ASSERT_EQUAL(0, HyphaIpOffsetOfIPHeader());
+    TEST_ASSERT_EQUAL(20, HyphaIpOffsetOfUDPHeader());
+    TEST_ASSERT_EQUAL(24, HyphaIpOffsetOfICMPDatagram());
+    TEST_ASSERT_EQUAL(28, HyphaIpOffsetOfUDPPayload());
+    size_t remaining = frame_length - HYPHA_IP_UDP_PAYLOAD_OFFSET;
+    printf("[TEST] Remaining payload size: %zu\r\n", remaining);
+    TEST_ASSERT_EQUAL_MEMORY(&frame.payload[HyphaIpOffsetOfUDPPayload()], &test_frame[HYPHA_IP_UDP_PAYLOAD_OFFSET],
+                             remaining);
+}
+
 void hyphaip_test_PopulateArpTable(void) {
     TEST_ASSERT_TRUE(use_good_setup);
     HyphaIpStatus_e status;
@@ -489,17 +583,18 @@ void hyphaip_test_PopulateEthernetFilter(void) {
         {{0x80, 0x90, 0xA2}, {0x12, 0x34, 0x59}},
     };
 
+    bool is_ethernet_filtering_enabled = HyphaIpGetCompiledEthernetFiltering();
     // before the filter has been enabled all addresses are permitted
-    // TEST_ASSERT_TRUE(HyphaIpIsPermittedEthernetAddress(context, addresses[0]));
-    // TEST_ASSERT_TRUE(HyphaIpIsPermittedEthernetAddress(context, addresses[1]));
-    // TEST_ASSERT_TRUE(HyphaIpIsPermittedEthernetAddress(context, addresses[2]));
+    TEST_ASSERT_EQUAL(!is_ethernet_filtering_enabled, HyphaIpIsPermittedEthernetAddress(context, addresses[0]));
+    TEST_ASSERT_EQUAL(!is_ethernet_filtering_enabled, HyphaIpIsPermittedEthernetAddress(context, addresses[1]));
+    TEST_ASSERT_EQUAL(!is_ethernet_filtering_enabled, HyphaIpIsPermittedEthernetAddress(context, addresses[2]));
 
-    // TEST_ASSERT_EQUAL(HYPHA_IP_ALLOW_ANY_LOCALHOST == 1,
-    //                   HyphaIpIsPermittedEthernetAddress(context, hypha_ip_ethernet_local));
-    // TEST_ASSERT_EQUAL(HYPHA_IP_ALLOW_ANY_BROADCAST == 1,
-    //                   HyphaIpIsPermittedEthernetAddress(context, hypha_ip_ethernet_broadcast));
-    // TEST_ASSERT_EQUAL(HYPHA_IP_ALLOW_ANY_MULTICAST,
-    //                   HyphaIpIsPermittedEthernetAddress(context, hypha_ip_ethernet_multicast));
+    TEST_ASSERT_EQUAL(HYPHA_IP_ALLOW_ANY_LOCALHOST == 1,
+                      HyphaIpIsPermittedEthernetAddress(context, hypha_ip_ethernet_local));
+    TEST_ASSERT_EQUAL(HYPHA_IP_ALLOW_ANY_BROADCAST == 1,
+                      HyphaIpIsPermittedEthernetAddress(context, hypha_ip_ethernet_broadcast));
+    TEST_ASSERT_EQUAL(HYPHA_IP_ALLOW_ANY_MULTICAST,
+                      HyphaIpIsPermittedEthernetAddress(context, hypha_ip_ethernet_multicast));
 
     HyphaIpStatus_e status = HyphaIpPopulateEthernetFilter(nullptr, HYPHA_IP_DIMOF(addresses), addresses);
     TEST_ASSERT_EQUAL(HyphaIpStatusInvalidContext, status);
@@ -525,6 +620,53 @@ void hyphaip_test_PopulateEthernetFilter(void) {
                       HyphaIpIsPermittedEthernetAddress(context, hypha_ip_ethernet_multicast));
 }
 
+void hyphaip_test_PopulateIpFilter(void) {
+    TEST_ASSERT_TRUE(use_good_setup);
+    HyphaIpIPv4Address_t allowed_addresses[] = {
+        {172, 16, 0, 11},
+        {172, 16, 0, 12},
+        {172, 16, 0, 13},
+    };
+    HyphaIpIPv4Address_t disallowed_addresses[] = {
+        {172, 16, 0, 14},
+        {172, 16, 0, 15},
+        {172, 16, 0, 16},
+    };
+    TEST_ASSERT_FALSE(HyphaIpIsPermittedIPv4Address(nullptr, allowed_addresses[0]));  // should return false
+    // are local host allowed?
+    TEST_ASSERT_EQUAL(HYPHA_IP_ALLOW_ANY_LOCALHOST == 1, HyphaIpIsPermittedIPv4Address(context, hypha_ip_localhost));
+    // are multicast addresses allowed?
+    TEST_ASSERT_EQUAL(HYPHA_IP_ALLOW_ANY_MULTICAST == 1, HyphaIpIsPermittedIPv4Address(context, hypha_ip_mdns));
+    // are broadcast addresses allowed?
+    TEST_ASSERT_EQUAL(HYPHA_IP_ALLOW_ANY_BROADCAST == 1,
+                      HyphaIpIsPermittedIPv4Address(context, hypha_ip_limited_broadcast));
+    bool is_ipv4_filtering_enabled = HyphaIpGetCompiledIPv4Filtering();
+    // are multicast addresses allowed
+    // before the filter has been enabled all addresses are permitted when it's disabled but not when it's enabled
+    TEST_ASSERT_EQUAL(!is_ipv4_filtering_enabled, HyphaIpIsPermittedIPv4Address(context, allowed_addresses[0]));
+    TEST_ASSERT_EQUAL(!is_ipv4_filtering_enabled, HyphaIpIsPermittedIPv4Address(context, allowed_addresses[1]));
+    TEST_ASSERT_EQUAL(!is_ipv4_filtering_enabled, HyphaIpIsPermittedIPv4Address(context, allowed_addresses[2]));
+    TEST_ASSERT_EQUAL(!is_ipv4_filtering_enabled, HyphaIpIsPermittedIPv4Address(context, disallowed_addresses[0]));
+    TEST_ASSERT_EQUAL(!is_ipv4_filtering_enabled, HyphaIpIsPermittedIPv4Address(context, disallowed_addresses[1]));
+    TEST_ASSERT_EQUAL(!is_ipv4_filtering_enabled, HyphaIpIsPermittedIPv4Address(context, disallowed_addresses[2]));
+    // add the allowed addresses to the filter
+    HyphaIpStatus_e status = HyphaIpPopulateIPv4Filter(nullptr, HYPHA_IP_DIMOF(allowed_addresses), allowed_addresses);
+    TEST_ASSERT_EQUAL(HyphaIpStatusInvalidContext, status);
+    status = HyphaIpPopulateIPv4Filter(context, 0, allowed_addresses);
+    TEST_ASSERT_EQUAL(HyphaIpStatusInvalidArgument, status);
+    status = HyphaIpPopulateIPv4Filter(context, HYPHA_IP_DIMOF(allowed_addresses), nullptr);
+    TEST_ASSERT_EQUAL(HyphaIpStatusInvalidArgument, status);
+    status = HyphaIpPopulateIPv4Filter(context, HYPHA_IP_DIMOF(allowed_addresses), allowed_addresses);
+    // verify that the addresses are now permitted
+    TEST_ASSERT_TRUE(HyphaIpIsPermittedIPv4Address(context, allowed_addresses[0]));
+    TEST_ASSERT_TRUE(HyphaIpIsPermittedIPv4Address(context, allowed_addresses[1]));
+    TEST_ASSERT_TRUE(HyphaIpIsPermittedIPv4Address(context, allowed_addresses[2]));
+    // verify that the disallowed addresses are NOT permitted
+    TEST_ASSERT_FALSE(HyphaIpIsPermittedIPv4Address(context, disallowed_addresses[0]));
+    TEST_ASSERT_FALSE(HyphaIpIsPermittedIPv4Address(context, disallowed_addresses[1]));
+    TEST_ASSERT_FALSE(HyphaIpIsPermittedIPv4Address(context, disallowed_addresses[2]));
+}
+
 void hyphaip_test_BadRunOnce(void) {
     HyphaIpStatus_e status = HyphaIpRunOnce(nullptr);
     TEST_ASSERT_EQUAL(HyphaIpStatusInvalidContext, status);
@@ -536,7 +678,14 @@ void hyphaip_test_PrepareMulticast(void) {
     HyphaIpStatus_e status = HyphaIpPrepareUdpReceive(nullptr, address, 9382);
     TEST_ASSERT_EQUAL(HyphaIpStatusInvalidContext, status);
 
+    TEST_ASSERT_EQUAL(HyphaIpStatusNotSupported, HyphaIpPrepareUdpReceive(context, hypha_ip_localhost, 9382));
+
     status = HyphaIpPrepareUdpReceive(context, address, 9382);
+    TEST_ASSERT_EQUAL(HyphaIpStatusOk, status);
+
+    TEST_ASSERT_EQUAL(HyphaIpStatusNotSupported, HyphaIpPrepareUdpTransmit(context, hypha_ip_localhost, 9382));
+
+    status = HyphaIpPrepareUdpTransmit(context, address, 9382);
     TEST_ASSERT_EQUAL(HyphaIpStatusOk, status);
 
     use_prepare_multicast = true;
@@ -587,8 +736,8 @@ void hyphaip_test_TransmitOneFrame(void) {
                                   .destination_address = {239, 0, 0, 155},
                                   .destination_port = 9382,
                                   .timestamp = 0};  // will be filled in by the transmit function
-    HyphaIpSpan_t datagram = {.pointer = &test_frame[HYPHA_IP_PAYLOAD_OFFSET],
-                              .count = sizeof(test_frame) - HYPHA_IP_PAYLOAD_OFFSET,
+    HyphaIpSpan_t datagram = {.pointer = (void *)&test_frame[HYPHA_IP_UDP_PAYLOAD_OFFSET],
+                              .count = sizeof(test_frame) - HYPHA_IP_UDP_PAYLOAD_OFFSET,
                               .type = HyphaIpSpanTypeUint8_t};
     HyphaIpStatus_e status = HyphaIpTransmitUdpDatagram(context, &metadata, datagram);
     TEST_ASSERT_EQUAL(HyphaIpStatusOk, status);
@@ -609,8 +758,13 @@ void hyphaip_test_TransmitReceiveLocalhost(void) {
                                   .destination_address = hypha_ip_localhost,
                                   .destination_port = 9382,
                                   .timestamp = 0};  // will be filled in by the transmit function
-    HyphaIpSpan_t datagram = {.pointer = &test_frame[HYPHA_IP_PAYLOAD_OFFSET],
-                              .count = sizeof(test_frame) - HYPHA_IP_PAYLOAD_OFFSET,
+    HyphaIpSpan_t empty = HYPHA_IP_DEFAULT_SPAN;
+    TEST_ASSERT_EQUAL(HyphaIpStatusInvalidContext, HyphaIpTransmitUdpDatagram(nullptr, &metadata, empty));
+    TEST_ASSERT_EQUAL(HyphaIpStatusInvalidArgument, HyphaIpTransmitUdpDatagram(context, nullptr, empty));
+    TEST_ASSERT_EQUAL(HyphaIpStatusInvalidSpan, HyphaIpTransmitUdpDatagram(context, &metadata, empty));
+
+    HyphaIpSpan_t datagram = {.pointer = (void *)&test_frame[HYPHA_IP_UDP_PAYLOAD_OFFSET],
+                              .count = sizeof(test_frame) - HYPHA_IP_UDP_PAYLOAD_OFFSET,
                               .type = HyphaIpSpanTypeUint8_t};
     HyphaIpStatus_e status = HyphaIpTransmitUdpDatagram(context, &metadata, datagram);
     TEST_ASSERT_EQUAL(HyphaIpStatusOk, status);

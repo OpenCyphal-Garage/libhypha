@@ -129,6 +129,9 @@ bool HyphaIpIsPermittedIPv4Address(HyphaIpContext_t context, HyphaIpIPv4Address_
     if (context->features.allow_ip_filtering == false) {
         return true;  // filtering is not enabled, so all addresses are allowed
     }
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerIPv4,
+                   "Checking if " PRIuIPv4Address " is in the filter table\r\n", address.a, address.b, address.c,
+                   address.d);
     // TODO improve the performance of this function by using an AVL or something similar
     // we assume there will be a small CPU penalty, these platforms can not tolerate a large memory penalty
     for (size_t i = 0; i < HYPHA_IP_IPv4_FILTER_TABLE_SIZE; i++) {
@@ -137,6 +140,9 @@ bool HyphaIpIsPermittedIPv4Address(HyphaIpContext_t context, HyphaIpIPv4Address_
             return true;  // found a match
         }
     }
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelError, HyphaIpPrintLayerIPv4,
+                   "Address " PRIuIPv4Address " is not in the filter table\r\n", address.a, address.b, address.c,
+                   address.d);
     return false;  // not found in the filter table
 }
 #endif  // HYPHA_IP_USE_IP_FILTER
@@ -167,38 +173,37 @@ bool HyphaIpIsPrivateIPv4Address(HyphaIpIPv4Address_t address) {
 
 HyphaIpStatus_e HyphaIpIPv4ReceivePacket(HyphaIpContext_t context, HyphaIpEthernetFrame_t *frame,
                                          HyphaIpTimestamp_t timestamp) {
-    HyphaIpPrinter_f printer = context->external.print;
-    if (printer) {
-        printer(context->theirs, "IPv4 Type Detected\r\n");
-    }
     context->statistics.counter.ipv4.rx.count++;
     HyphaIpIPv4Header_t ip_header;
     HyphaIpCopyIPHeaderFromFrame(&ip_header, frame);
-    if (printer) {
-        printer(context->theirs,
-                "RX: IP Header: Version=%u, IHL=%u, DSCP=%u, ECN=%u, Length=%u, ID=%u, DF=%u, MF=%u, "
-                "Offset=%u, TTL=%u, Protocol=%u, Checksum=%04X\r\n",
-                ip_header.version, ip_header.IHL, ip_header.DSCP, ip_header.ECN, ip_header.length,
-                ip_header.identification, ip_header.DF, ip_header.MF, ip_header.fragment_offset, ip_header.TTL,
-                ip_header.protocol, ip_header.checksum);
-        printer(context->theirs, "RX: Source: " PRIuIPv4Address " => Destination: " PRIuIPv4Address "\r\n",
-                ip_header.source.a, ip_header.source.b, ip_header.source.c, ip_header.source.d, ip_header.destination.a,
-                ip_header.destination.b, ip_header.destination.c, ip_header.destination.d);
-        HyphaIpPrintArray16(context, sizeof(ip_header) / sizeof(uint16_t), (uint16_t *)&ip_header);
-    }
+
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerIPv4,
+                   "RX: IP Header: Version=%u, IHL=%u, DSCP=%u, ECN=%u, Length=%u, ID=%u, DF=%u, MF=%u, "
+                   "Offset=%u, TTL=%u, Protocol=%u, Checksum=%04X\r\n",
+                   ip_header.version, ip_header.IHL, ip_header.DSCP, ip_header.ECN, ip_header.length,
+                   ip_header.identification, ip_header.DF, ip_header.MF, ip_header.fragment_offset, ip_header.TTL,
+                   ip_header.protocol, ip_header.checksum);
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerIPv4,
+                   "RX: Source: " PRIuIPv4Address " => Destination: " PRIuIPv4Address "\r\n", ip_header.source.a,
+                   ip_header.source.b, ip_header.source.c, ip_header.source.d, ip_header.destination.a,
+                   ip_header.destination.b, ip_header.destination.c, ip_header.destination.d);
+    HYPHA_IP_DO(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerIPv4,
+                HyphaIpPrintArray16(context, sizeof(ip_header) / sizeof(uint16_t), (uint16_t *)&ip_header););
+
     // IP Header acceptance rules
     if (HYPHA_IP_USE_IP_CHECKSUM) {
         HyphaIpSpan_t ip_header_span = HyphaIpSpanIpHeader(frame);
         HyphaIpSpan_t ip_payload_span = HYPHA_IP_DEFAULT_SPAN;
         // 0.) Is the HEADER Checksum valid?
         uint16_t checksum = HyphaIpComputeChecksum(ip_header_span, ip_payload_span);
-        if (printer) {
-            printer(context->theirs, "Computed Checksum: %04X (should be %04X)\r\n", checksum, HyphaIpChecksumValid);
-            printer(context->theirs, "Provided Checksum: %04X\r\n", ip_header.checksum);
-        }
+        HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerIPv4,
+                       "Computed Checksum: %04X (should be %04X)\r\n", checksum, HyphaIpChecksumValid);
+        HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerIPv4, "Provided Checksum: %04X\r\n",
+                       ip_header.checksum);
         bool valid_checksum = (checksum == HyphaIpChecksumValid);
         if (!valid_checksum) {
             context->statistics.ip.rejected++;
+            HYPHA_IP_REPORT(context, HyphaIpStatusIPv4ChecksumRejected);
             return HyphaIpStatusIPv4ChecksumRejected;
         }
     }
@@ -208,9 +213,12 @@ HyphaIpStatus_e HyphaIpIPv4ReceivePacket(HyphaIpContext_t context, HyphaIpEthern
     bool header_length_valid = (ip_header.IHL == 5);
     // no fragmentation is allowed, offset must be zero.
     bool no_fragmentation = (ip_header.MF == 0) && (ip_header.fragment_offset == 0);
-    if (!ipv4_version || !header_length_valid || (ip_header.length > HYPHA_IP_MAX_UDP_DATAGRAM_SIZE) ||
-        !no_fragmentation) {
+    if (!ipv4_version || !header_length_valid || (ip_header.length > HYPHA_IP_MAX_IP_LENGTH) || !no_fragmentation) {
         context->statistics.ip.rejected++;
+        HYPHA_IP_PRINT(context, HyphaIpPrintLevelError, HyphaIpPrintLayerIPv4,
+                       "Invalid IPv4 Header: Version=%u, IHL=%u, Length=%u, DF=%u, MF=%u, Offset=%u\r\n",
+                       ip_header.version, ip_header.IHL, ip_header.length, ip_header.DF, ip_header.MF,
+                       ip_header.fragment_offset);
         return HyphaIpStatusIPv4HeaderRejected;
     }
     // 3.) check to make sure the destination address is valid (localhost from some localhost, our interface but then
@@ -240,10 +248,10 @@ HyphaIpStatus_e HyphaIpIPv4ReceivePacket(HyphaIpContext_t context, HyphaIpEthern
     if (context->features.allow_ip_filtering == true && !from_our_address) {
         bool found = HyphaIpIsPermittedIPv4Address(context, ip_header.source);
         if (!found) {
-            if (printer) {
-                printer(context->theirs, "Source Address " PRIuIPv4Address " not in filter table\r\n",
-                        ip_header.source.a, ip_header.source.b, ip_header.source.c, ip_header.source.d);
-            }
+            HYPHA_IP_PRINT(context, HyphaIpPrintLevelInfo, HyphaIpPrintLayerIPv4,
+                           "Source Address " PRIuIPv4Address " not in filter table\r\n", ip_header.source.a,
+                           ip_header.source.b, ip_header.source.c, ip_header.source.d);
+
             context->statistics.ip.rejected++;
             return HyphaIpStatusIPv4SourceFiltered;
         }
@@ -258,12 +266,12 @@ HyphaIpStatus_e HyphaIpIPv4ReceivePacket(HyphaIpContext_t context, HyphaIpEthern
     } else if (ip_header.protocol == HyphaIpProtocol_ICMP) {
         // TODO support?
         context->statistics.counter.icmp.rx.count++;
-        context->external.report(context->theirs, HyphaIpStatusNotImplemented, __func__, __LINE__);
+        HYPHA_IP_REPORT(context, HyphaIpStatusNotImplemented);
         return HyphaIpStatusNotImplemented;
     } else if (ip_header.protocol == HyphaIpProtocol_IGMP) {
         // TODO support receiving?
         context->statistics.counter.igmp.rx.count++;
-        context->external.report(context->theirs, HyphaIpStatusNotImplemented, __func__, __LINE__);
+        HYPHA_IP_REPORT(context, HyphaIpStatusNotImplemented);
         return HyphaIpStatusNotImplemented;
     }
     context->statistics.unknown.rejected++;
@@ -281,6 +289,9 @@ HyphaIpStatus_e HyphaIpIPv4TransmitPacket(HyphaIpContext_t context, HyphaIpEther
     }
     if (HyphaIpSpanIsEmpty(packet)) {
         return HyphaIpStatusInvalidSpan;
+    }
+    if (HyphaIpSpanSize(packet) > HYPHA_IP_MAX_IP_PAYLOAD_SIZE) {
+        return HyphaIpStatusIPv4PacketTooLarge;
     }
     // check to make sure the destination is valid
     bool to_multicast = HyphaIpIsMulticastIPv4Address(metadata->destination_address);
@@ -308,7 +319,7 @@ HyphaIpStatus_e HyphaIpIPv4TransmitPacket(HyphaIpContext_t context, HyphaIpEther
         .IHL = 5,  // no options are supported, so the header length is 5 * sizeof(uint32_t) = 20 bytes
         .DSCP = 0,
         .ECN = 0,
-        .length = (uint16_t)(sizeof(HyphaIpIPv4Header_t) + (uint16_t)HyphaIpSizeOfSpan(packet)),
+        .length = (uint16_t)(sizeof(HyphaIpIPv4Header_t) + (uint16_t)HyphaIpSpanSize(packet)),
         .identification = 0,  // no fragmentation, so ID is 0
         .zero = 0,
         .DF = 0,
@@ -321,21 +332,19 @@ HyphaIpStatus_e HyphaIpIPv4TransmitPacket(HyphaIpContext_t context, HyphaIpEther
         .destination = metadata->destination_address,
     };
 
-    // if debug, print the IP header
-    HyphaIpPrinter_f printer = context->external.print;
-    if (printer) {
-        printer(context->theirs,
-                "TX: IP Header: Version=%u, IHL=%u, DSCP=%u, ECN=%u, Length=%u, ID=%u, DF=%u, MF=%u, "
-                "Offset=%u, TTL=%u, Protocol=%u, Checksum=%04X\r\n",
-                ip_header.version, ip_header.IHL, ip_header.DSCP, ip_header.ECN, ip_header.length,
-                ip_header.identification, ip_header.DF, ip_header.MF, ip_header.fragment_offset, ip_header.TTL,
-                ip_header.protocol, ip_header.checksum);
-        // print the source and destination addresses
-        printer(context->theirs, "TX: Source: " PRIuIPv4Address " => Destination: " PRIuIPv4Address "\r\n",
-                ip_header.source.a, ip_header.source.b, ip_header.source.c, ip_header.source.d, ip_header.destination.a,
-                ip_header.destination.b, ip_header.destination.c, ip_header.destination.d);
-        HyphaIpPrintArray16(context, sizeof(ip_header) / sizeof(uint16_t), (uint16_t *)&ip_header);
-    }
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerIPv4,
+                   "TX: IP Header: Version=%u, IHL=%u, DSCP=%u, ECN=%u, Length=%u, ID=%u, DF=%u, MF=%u, "
+                   "Offset=%u, TTL=%u, Protocol=%u, Checksum=%04X\r\n",
+                   ip_header.version, ip_header.IHL, ip_header.DSCP, ip_header.ECN, ip_header.length,
+                   ip_header.identification, ip_header.DF, ip_header.MF, ip_header.fragment_offset, ip_header.TTL,
+                   ip_header.protocol, ip_header.checksum);
+    // print the source and destination addresses
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerIPv4,
+                   "TX: Source: " PRIuIPv4Address " => Destination: " PRIuIPv4Address "\r\n", ip_header.source.a,
+                   ip_header.source.b, ip_header.source.c, ip_header.source.d, ip_header.destination.a,
+                   ip_header.destination.b, ip_header.destination.c, ip_header.destination.d);
+    HYPHA_IP_DO(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerIPv4,
+                HyphaIpPrintArray16(context, sizeof(ip_header) / sizeof(uint16_t), (uint16_t *)&ip_header));
 
     // copy-flip the header into the right place, payload is already there
     HyphaIpCopyIPHeaderToFrame(frame, &ip_header);
@@ -357,19 +366,19 @@ HyphaIpStatus_e HyphaIpIPv4TransmitPacket(HyphaIpContext_t context, HyphaIpEther
         return HyphaIpIPv4ReceivePacket(context, frame, metadata->timestamp);
     }  // otherwise continue to the ethernet layer
 
-    size_t const payload_length = sizeof(ip_header) + HyphaIpSizeOfSpan(packet);
+    size_t const full_packet_length = sizeof(ip_header) + HyphaIpSpanSize(packet);
     // fill in the ethernet header and transmit in this function
     HyphaIpStatus_e status =
-        HyphaIpEthernetTransmitFrame(context, frame, metadata, HyphaIpEtherType_IPv4, payload_length);
+        HyphaIpEthernetTransmitFrame(context, frame, metadata, HyphaIpEtherType_IPv4, full_packet_length);
     if (HyphaIpIsSuccess(status)) {
         // if the transmission was successful, we can update the statistics
         context->statistics.counter.ipv4.tx.count++;
-        context->statistics.counter.ipv4.tx.bytes += payload_length;
+        context->statistics.counter.ipv4.tx.bytes += full_packet_length;
         context->statistics.ip.accepted++;
     } else {
         // if the transmission failed, we can update the statistics
         context->statistics.ip.rejected++;
     }
-    context->external.report(context->theirs, status, __func__, __LINE__);
+    HYPHA_IP_REPORT(context, status);
     return status;
 }

@@ -182,6 +182,7 @@ HyphaIpStatus_e HyphaIpEthernetTransmitFrame(HyphaIpContext_t context, HyphaIpEt
         return HyphaIpStatusInvalidContext;
     }
     if (frame == nullptr || metadata == nullptr) {
+        HYPHA_IP_REPORT(context, HyphaIpStatusInvalidArgument);
         return HyphaIpStatusInvalidArgument;
     }
     HyphaIpEthernetHeader_t ethernet_header = {
@@ -204,25 +205,23 @@ HyphaIpStatus_e HyphaIpEthernetTransmitFrame(HyphaIpContext_t context, HyphaIpEt
     }
 
     // if debug, print the header
-    HyphaIpPrinter_f printer = context->external.print;
-    if (printer) {
-        printer(context->theirs, "Transmitting Ethernet Frame %p:\r\n", frame);
-        printer(context->theirs, "  Destination: %02X:%02X:%02X:%02X:%02X:%02X\r\n", ethernet_header.destination.oui[0],
-                ethernet_header.destination.oui[1], ethernet_header.destination.oui[2],
-                ethernet_header.destination.uid[0], ethernet_header.destination.uid[1],
-                ethernet_header.destination.uid[2]);
-        printer(context->theirs, "  Source: %02X:%02X:%02X:%02X:%02X:%02X\r\n", ethernet_header.source.oui[0],
-                ethernet_header.source.oui[1], ethernet_header.source.oui[2], ethernet_header.source.uid[0],
-                ethernet_header.source.uid[1], ethernet_header.source.uid[2]);
-        printer(context->theirs, "  Type: %04X\r\n", (unsigned int)ethernet_header.type);
-    }
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerMAC, "Transmitting Ethernet Frame %p:\r\n", frame);
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerMAC, "  Destination: " PRIuEthernetAddress "\r\n",
+                   ethernet_header.destination.oui[0], ethernet_header.destination.oui[1],
+                   ethernet_header.destination.oui[2], ethernet_header.destination.uid[0],
+                   ethernet_header.destination.uid[1], ethernet_header.destination.uid[2]);
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerMAC, "  Source: " PRIuEthernetAddress "\r\n",
+                   ethernet_header.source.oui[0], ethernet_header.source.oui[1], ethernet_header.source.oui[2],
+                   ethernet_header.source.uid[0], ethernet_header.source.uid[1], ethernet_header.source.uid[2]);
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerMAC, "  Type: %04X\r\n",
+                   (unsigned int)ethernet_header.type);
 
     // copy-flip each header into the right place
     HyphaIpCopyEthernetHeaderToFrame(frame, &ethernet_header);
 
     // transmit
     HyphaIpStatus_e status = context->external.transmit(context->theirs, frame);
-    context->external.report(context->theirs, status, __func__, __LINE__);
+    HYPHA_IP_REPORT(context, status);
     if (HyphaIpIsSuccess(status)) {
         // this is the closest timestamp for success
         metadata->timestamp = context->external.get_monotonic_timestamp(context->theirs);
@@ -245,23 +244,22 @@ HyphaIpStatus_e HyphaIpEthernetReceiveFrame(HyphaIpContext_t context, HyphaIpEth
     if (frame == nullptr) {
         return HyphaIpStatusInvalidArgument;
     }
-    HyphaIpPrinter_f printer = context->external.print;
     HyphaIpTimestamp_t timestamp = context->external.get_monotonic_timestamp(context->theirs);
     HyphaIpEthernetHeader_t ethernet_header;
     context->statistics.counter.mac.rx.count++;
     context->statistics.counter.mac.rx.bytes += sizeof(HyphaIpEthernetHeader_t);
     HyphaIpCopyEthernetHeaderFromFrame(&ethernet_header, frame);
-    if (printer) {
-        printer(context->theirs, "Receiving Ethernet Frame %p:\r\n", frame);
-        printer(context->theirs, "  Destination: %02X:%02X:%02X:%02X:%02X:%02X\r\n", ethernet_header.destination.oui[0],
-                ethernet_header.destination.oui[1], ethernet_header.destination.oui[2],
-                ethernet_header.destination.uid[0], ethernet_header.destination.uid[1],
-                ethernet_header.destination.uid[2]);
-        printer(context->theirs, "  Source: %02X:%02X:%02X:%02X:%02X:%02X\r\n", ethernet_header.source.oui[0],
-                ethernet_header.source.oui[1], ethernet_header.source.oui[2], ethernet_header.source.uid[0],
-                ethernet_header.source.uid[1], ethernet_header.source.uid[2]);
-        printer(context->theirs, "  Type: %04X\r\n", (unsigned int)ethernet_header.type);
-    }
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerMAC, "Receiving Ethernet Frame %p:\r\n", frame);
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerMAC, "  Destination: " PRIuEthernetAddress "\r\n",
+                   ethernet_header.destination.oui[0], ethernet_header.destination.oui[1],
+                   ethernet_header.destination.oui[2], ethernet_header.destination.uid[0],
+                   ethernet_header.destination.uid[1], ethernet_header.destination.uid[2]);
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerMAC, "  Source: " PRIuEthernetAddress "\r\n",
+                   ethernet_header.source.oui[0], ethernet_header.source.oui[1], ethernet_header.source.oui[2],
+                   ethernet_header.source.uid[0], ethernet_header.source.uid[1], ethernet_header.source.uid[2]);
+    HYPHA_IP_PRINT(context, HyphaIpPrintLevelDebug, HyphaIpPrintLayerMAC, "  Type: %04X\r\n",
+                   (unsigned int)ethernet_header.type);
+
     // Ethernet Acceptance Rules
     // 1.) Is it destined for us, explicitly?
     bool our_mac_address = HyphaIpIsOurEthernetAddress(context, ethernet_header.destination);
@@ -275,10 +273,14 @@ HyphaIpStatus_e HyphaIpEthernetReceiveFrame(HyphaIpContext_t context, HyphaIpEth
     bool allowed_mac = HyphaIpIsPermittedEthernetAddress(context, ethernet_header.destination);
     if (!our_mac_address && !allowed_multicast_mac && !allowed_broadcast && !allowed_mac) {
         context->statistics.mac.rejected++;
+        HYPHA_IP_PRINT(context, HyphaIpPrintLevelError, HyphaIpPrintLayerMAC,
+                       "MAC Rejected " PRIuEthernetAddress " -> " PRIuEthernetAddress "\r\n",
+                       ethernet_header.source.oui[0], ethernet_header.source.oui[1], ethernet_header.source.oui[2],
+                       ethernet_header.source.uid[0], ethernet_header.source.uid[1], ethernet_header.source.uid[2],
+                       ethernet_header.destination.oui[0], ethernet_header.destination.oui[1],
+                       ethernet_header.destination.oui[2], ethernet_header.destination.uid[0],
+                       ethernet_header.destination.uid[1], ethernet_header.destination.uid[2]);
         return HyphaIpStatusMacRejected;
-    }
-    if (printer) {
-        printer(context->theirs, "MAC Accepted\r\n");
     }
     context->statistics.mac.accepted++;
 
@@ -288,17 +290,15 @@ HyphaIpStatus_e HyphaIpEthernetReceiveFrame(HyphaIpContext_t context, HyphaIpEth
     bool vlan_type = (ethernet_header.type == HyphaIpEtherType_VLAN);
     if (!arp_type && !ipv4_type && !vlan_type) {
         context->statistics.ethertype.rejected++;
+        HYPHA_IP_PRINT(context, HyphaIpPrintLevelError, HyphaIpPrintLayerMAC, "EtherType %04X Rejected\r\n",
+                       ethernet_header.type);
         return HyphaIpStatusEthernetTypeRejected;
-    }
-    if (printer) {
-        printer(context->theirs, "EtherType Accepted\r\n");
     }
 #if (HYPHA_IP_USE_VLAN == 1)
     if (context->features.allow_vlan_filtering && vlan_type && ethernet_header.vlan != HYPHA_IP_VLAN_ID) {
         context->statistics.ethertype.rejected++;
-        if (printer) {
-            printer(context->theirs, "VLAN ID %u Rejected\r\n", ethernet_header.vlan);
-        }
+        HYPHA_IP_PRINT(context, HyphaIpPrintLevelError, HyphaIpPrintLayerMAC, "VLAN ID %u Rejected\r\n",
+                       ethernet_header.vlan);
         return HyphaIpStaticVLANFiltered;
     }
 #endif
@@ -310,5 +310,5 @@ HyphaIpStatus_e HyphaIpEthernetReceiveFrame(HyphaIpContext_t context, HyphaIpEth
     } else if (ipv4_type) {
         return HyphaIpIPv4ReceivePacket(context, frame, timestamp);
     }
-    return HyphaIpStatusOk;
+    return HyphaIpStatusNotSupported;
 }

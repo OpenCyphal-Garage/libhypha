@@ -89,12 +89,14 @@ HYPHA_INTERNAL const HyphaIpFlipUnit_t flip_igmp_packet[] = {
 
 size_t HyphaIpOffsetOfIPHeader(void) { return 0; }
 
-size_t HyphaIpOffsetOfUpdHeader(void) { return sizeof(HyphaIpIPv4Header_t); }
+size_t HyphaIpOffsetOfUDPHeader(void) { return HyphaIpOffsetOfIPHeader() + sizeof(HyphaIpIPv4Header_t); }
 
-size_t HyphaIpOffsetOfIcmpDatagram(void) { return sizeof(HyphaIpIPv4Header_t) + sizeof(HyphaIpICMPHeader_t); }
+size_t HyphaIpOffsetOfICMPDatagram(void) {
+    return HyphaIpOffsetOfIPHeader() + sizeof(HyphaIpIPv4Header_t) + sizeof(HyphaIpICMPHeader_t);
+}
 
-size_t HyphaIpOffsetOfUpdDatagram(void) {
-    return HyphaIpOffsetOfIPHeader() + sizeof(HyphaIpIPv4Header_t) + sizeof(HyphaIpUdpHeader_t);
+size_t HyphaIpOffsetOfUDPPayload(void) {
+    return HyphaIpOffsetOfIPHeader() + sizeof(HyphaIpIPv4Header_t) + sizeof(HyphaIpUDPHeader_t);
 }
 
 void HyphaIpCopyEthernetHeaderFromFrame(HyphaIpEthernetHeader_t *dst, HyphaIpEthernetFrame_t *src) {
@@ -121,24 +123,24 @@ void HyphaIpUpdateIpChecksumInFrame(HyphaIpEthernetFrame_t *dst, uint16_t checks
     // printf("Wrote out %04x as checksum\r\n", *checksum_ptr);
 }
 
-void HyphaIpCopyUdpHeaderFromFrame(HyphaIpUdpHeader_t *dst, HyphaIpEthernetFrame_t *src) {
-    size_t offset = HyphaIpOffsetOfUpdHeader();
+void HyphaIpCopyUdpHeaderFromFrame(HyphaIpUDPHeader_t *dst, HyphaIpEthernetFrame_t *src) {
+    size_t offset = HyphaIpOffsetOfUDPHeader();
     HyphaIpFlipCopy(HYPHA_IP_DIMOF(flip_udp_header), flip_udp_header, dst, &src->payload[offset]);
 }
 
-void HyphaIpCopyUdpHeaderToFrame(HyphaIpEthernetFrame_t *dst, HyphaIpUdpHeader_t const *src) {
-    size_t offset = HyphaIpOffsetOfUpdHeader();
+void HyphaIpCopyUdpHeaderToFrame(HyphaIpEthernetFrame_t *dst, HyphaIpUDPHeader_t const *src) {
+    size_t offset = HyphaIpOffsetOfUDPHeader();
     HyphaIpFlipCopy(HYPHA_IP_DIMOF(flip_udp_header), flip_udp_header, &dst->payload[offset], src);
 }
 
-void HyphaIpCopyUdpDatagramFromFrame(uint8_t *dst, HyphaIpEthernetFrame_t *src) {
-    size_t offset = HyphaIpOffsetOfUpdDatagram();
-    HyphaIpFlipCopy(HYPHA_IP_DIMOF(flip_udp_header), flip_udp_header, dst, &src->payload[offset]);
+void HyphaIpCopyUdpPayloadFromFrame(HyphaIpSpan_t span, HyphaIpEthernetFrame_t *src) {
+    size_t offset = HyphaIpOffsetOfUDPPayload();
+    memcpy(span.pointer, &src->payload[offset], HyphaIpSpanSize(span));
 }
 
-void HyphaIpCopyUdpDatagramToFrame(HyphaIpEthernetFrame_t *dst, HyphaIpSpan_t span) {
-    size_t offset = HyphaIpOffsetOfUpdDatagram();
-    memcpy(&dst->payload[offset], span.pointer, HyphaIpSizeOfSpan(span));
+void HyphaIpCopyUdpPayloadToFrame(HyphaIpEthernetFrame_t *dst, HyphaIpSpan_t span) {
+    size_t offset = HyphaIpOffsetOfUDPPayload();
+    memcpy(&dst->payload[offset], span.pointer, HyphaIpSpanSize(span));
 }
 
 void HyphaIpCopyIcmpHeaderFromFrame(HyphaIpICMPHeader_t *dst, HyphaIpEthernetFrame_t *src) {

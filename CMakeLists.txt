@@ -9,6 +9,7 @@ set(CMAKE_C_STANDARD 23)
 option(BUILD_SHARED_LIBS "Builds libraries as dynamic objects" OFF)
 option(BUILD_UNIT_TESTS "Builds the unit tests" ON)
 option(BUILD_COVERAGE "Builds with coverage support" ON)
+option(BUILD_ANALYSIS "Builds with static analysis support" ON)
 
 ###############################################################
 # Interface Libraries
@@ -27,7 +28,15 @@ target_compile_options(hypha_ip_rules
         -Wunused-parameter -Wunused-variable -Wstrict-prototypes -Wredundant-decls
         -pedantic
         -fdiagnostics-color=always
-        $<$<BOOL:${BUILD_COVERAGE}>:-fprofile-instr-generate -fprofile-arcs -ftest-coverage -fcoverage-mapping>
+        # GNU specific options
+        $<$<AND:$<BOOL:${BUILD_ANALYSIS}>,$<C_COMPILER_ID:GNU>>:-fanalyzer>
+        $<$<AND:$<BOOL:${BUILD_COVERAGE}>,$<C_COMPILER_ID:GNU>>:-ftest-coverage -fcoverage-mapping>
+        # Clang specific options
+        $<$<AND:$<BOOL:${BUILD_ANALYSIS}>,$<C_COMPILER_ID:Clang>>:-Xclang -analyzer-output=text>
+        $<$<AND:$<BOOL:${BUILD_COVERAGE}>,$<C_COMPILER_ID:Clang>>:-fprofile-instr-generate -fprofile-arcs -ftest-coverage -fcoverage-mapping>
+        # AppleClang specific options
+        $<$<AND:$<BOOL:${BUILD_ANALYSIS}>,$<C_COMPILER_ID:AppleClang>>:-Xclang -analyzer-output=text>
+        $<$<AND:$<BOOL:${BUILD_COVERAGE}>,$<C_COMPILER_ID:AppleClang>>:-fprofile-instr-generate -fprofile-arcs -ftest-coverage -fcoverage-mapping>
 )
 target_link_libraries(hypha_ip_rules INTERFACE
     $<$<BOOL:${BUILD_COVERAGE}>:--coverage>
@@ -158,11 +167,11 @@ if (BUILD_COVERAGE)
         # set(LLVM_PROFILE_FILE "${TARGET}.profraw")
         add_custom_target(coverage-${ARG_TARGET}
             DEPENDS ${ARG_TARGET} test
-            COMMAND llvm-profdata merge -sparse $<TARGET_FILE:${ARG_TARGET}>.profraw -o $<TARGET_FILE:${ARG_TARGET}>.profdata
-            COMMAND llvm-cov show   $<TARGET_FILE:${ARG_TARGET}> --color --sources ${LIBRARIES_SOURCES} -instr-profile=$<TARGET_FILE:${ARG_TARGET}>.profdata --format=html -output-dir=${CMAKE_BINARY_DIR}/coverage/coverage-${ARG_TARGET}
-            COMMAND llvm-cov report $<TARGET_FILE:${ARG_TARGET}> --color --sources ${LIBRARIES_SOURCES} -instr-profile=$<TARGET_FILE:${ARG_TARGET}>.profdata
-            COMMAND llvm-cov export $<TARGET_FILE:${ARG_TARGET}> --color --sources ${LIBRARIES_SOURCES} -instr-profile=$<TARGET_FILE:${ARG_TARGET}>.profdata -format=lcov > $<TARGET_FILE:${ARG_TARGET}>.info
-            COMMAND genhtml $<TARGET_FILE:${ARG_TARGET}>.info -o ${CMAKE_BINARY_DIR}/coverage/coverage-${ARG_TARGET}
+            COMMAND ${LLVM_PROFDATA} merge -sparse $<TARGET_FILE:${ARG_TARGET}>.profraw -o $<TARGET_FILE:${ARG_TARGET}>.profdata
+            COMMAND ${LLVM_COV} show   $<TARGET_FILE:${ARG_TARGET}> --color --sources ${LIBRARIES_SOURCES} -instr-profile=$<TARGET_FILE:${ARG_TARGET}>.profdata --format=html -output-dir=${CMAKE_BINARY_DIR}/coverage/coverage-${ARG_TARGET}
+            COMMAND ${LLVM_COV} report $<TARGET_FILE:${ARG_TARGET}> --color --sources ${LIBRARIES_SOURCES} -instr-profile=$<TARGET_FILE:${ARG_TARGET}>.profdata
+            COMMAND ${LLVM_COV} export $<TARGET_FILE:${ARG_TARGET}> --color --sources ${LIBRARIES_SOURCES} -instr-profile=$<TARGET_FILE:${ARG_TARGET}>.profdata -format=lcov > $<TARGET_FILE:${ARG_TARGET}>.info
+            COMMAND ${GENHTML} $<TARGET_FILE:${ARG_TARGET}>.info -o ${CMAKE_BINARY_DIR}/coverage/coverage-${ARG_TARGET}
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         )
     endfunction()

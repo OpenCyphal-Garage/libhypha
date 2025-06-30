@@ -123,7 +123,7 @@ typedef struct HyphaIpEthernetAddress {
 static_assert(sizeof(HyphaIpEthernetAddress_t) == 6U, "Must be exactly this size");
 
 /// For use with printf-like format strings for Ethernet Addresses
-#define PRIuEthernetAddress "%02x:%02x:%02x:%02x:%02x:%02x"
+#define PRIuEthernetAddress "%02X:%02X:%02X:%02X:%02X:%02X"
 
 /// The 802.3 Ethernet Frame Header
 typedef struct HyphaIpEthernetHeader {
@@ -366,6 +366,8 @@ typedef enum HyphaIpStatus {
     HyphaIpStatusIPv4FilterTableFull = -24,      ///<  The IPv4 filter table is full and cannot accept more entries
     HyphaIpStatusIPv4SourceFiltered = -25,       ///<  The source address was filtered out
     HyphaIpStaticVLANFiltered = -26,             ///<  The VLAN ID was filtered out
+    HyphaIpStatusIPv4PacketTooLarge = -27,       ///<  The IPv4 packet was too large to be processed
+    HyphaIpStatusUdpDatagramTooLarge = -28,      ///<  The UDP datagram was too large to be processed
 } HyphaIpStatus_e;
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -376,6 +378,16 @@ typedef enum HyphaIpStatus {
 bool HyphaIpIsSuccess(HyphaIpStatus_e status);
 /// @return True if the status is not successful, false otherwise.
 bool HyphaIpIsFailure(HyphaIpStatus_e status);
+/// @return The MTU as given at compile time.
+size_t HyphaIpGetCompiledMTU(void);
+/// @return The default TTL as given at compile time.
+size_t HyphaIpGetCompiledTTL(void);
+/// @return The VLAN ID as given at compile time.
+size_t HyphaIpGetCompiledVLANID(void);
+/// @return True if IPv4 filtering has been compiled in and enabled, false otherwise.
+bool HyphaIpGetCompiledIPv4Filtering(void);
+/// @return True if Ethernet filtering has been compiled in and enabled, false otherwise.
+bool HyphaIpGetCompiledEthernetFiltering(void);
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // Contextual API
@@ -425,10 +437,16 @@ void HyphaIpPrintArray08(HyphaIpContext_t context, size_t len, uint8_t data[len]
 void HyphaIpSpanPrint(HyphaIpContext_t context, HyphaIpSpan_t span);
 
 /// @return The number of bytes that the span contains
-size_t HyphaIpSizeOfSpan(HyphaIpSpan_t span);
+size_t HyphaIpSpanSize(HyphaIpSpan_t span);
 
 /// Determines if the span is empty
 bool HyphaIpSpanIsEmpty(HyphaIpSpan_t span);
+
+/// Resizes a span to a new size which can only be less than or equal to the current size.
+/// @param span The span to resize
+/// @param new_size The new size of the span in bytes
+/// @return True if the resize was successful, false otherwise.
+bool HyphaIpSpanResize(HyphaIpSpan_t *span, uint32_t new_size);
 
 /// Counts the number of accepted and rejects at a specific layer of the stack
 typedef struct HyphaIpLayerResult {
@@ -479,6 +497,8 @@ typedef struct HyphaIpStatistics {
     HyphaIpLayerResult_t ethertype;  ///< Ethernet Type statistics
     HyphaIpLayerResult_t ip;         ///< IPv4 Layer statistics
     HyphaIpLayerResult_t udp;        ///< UDP Layer statistics
+    HyphaIpLayerResult_t icmp;       ///< ICMP Layer statistics
+    HyphaIpLayerResult_t igmp;       ///< IGMP Layer statistics
     HyphaIpLayerResult_t unknown;    ///< Unknown protocols, not supported
     HyphaIpArpCounter_t arp;         ///< ARP Layer statistics
     HyphaIpCounter_t counter;        ///< The throughput statistics for each layer
@@ -519,6 +539,14 @@ typedef struct HyphaIpPrintInfo {
         } fields;                 ///<  The print mask fields structure
     } mask;                       ///< The union of a full mask and a set of subfields
 } HyphaIpPrintInfo_t;
+
+#ifndef HYPHA_IP_DEBUG_MASK
+/// The default debug mask for the Hypha IP stack. Provide a custom value in your build system to override this as a
+/// 16bit hex value
+#define HYPHA_IP_DEBUG_MASK                                                               \
+    (uint32_t)((HyphaIpPrintLevelError | HyphaIpPrintLevelWarn | HyphaIpPrintLevelInfo) | \
+               ((HyphaIpPrintLayerUDP | HyphaIpPrintLayerIPv4) << 8U))
+#endif
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // EXTERN (The required interfaces which we depend on)
@@ -578,7 +606,7 @@ typedef HyphaIpStatus_e (*HyphaIpUdpDatagramListener_f)(HyphaIpExternalContext_t
 
 /// Used to report internal issues all the way out of the API to an observer.
 typedef void (*HyphaIpReport_f)(HyphaIpExternalContext_t context, HyphaIpStatus_e status, char const *const func,
-                                unsigned int line);
+                                char const *const file, unsigned int line);
 
 #if defined(HYPHA_IP_USE_ICMP) || defined(HYPHA_IP_USE_ICMPv6)
 /// @brief The callback provided by the Client for ICMP datagrams.

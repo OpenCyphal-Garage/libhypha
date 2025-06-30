@@ -53,6 +53,7 @@ HyphaIpStatus_e HyphaIpInitialize(HyphaIpContext_t *context, HyphaIpNetworkInter
     }
     *context = &gHyphaIpContext;
     // initialize the variables
+    gHyphaIpContext.debugging.mask.value = HYPHA_IP_DEBUG_MASK;
     gHyphaIpContext.features.allow_any_localhost = (HYPHA_IP_ALLOW_ANY_LOCALHOST == 1);
     gHyphaIpContext.features.allow_any_multicast = (HYPHA_IP_ALLOW_ANY_MULTICAST == 1);
     gHyphaIpContext.features.allow_any_broadcast = (HYPHA_IP_ALLOW_ANY_BROADCAST == 1);
@@ -98,18 +99,19 @@ HyphaIpStatus_e HyphaIpRunOnce(HyphaIpContext_t context) {
     if (frame == nullptr) {
         context->statistics.frames.failures++;
         status = HyphaIpStatusOutOfMemory;
-        context->external.report(context->theirs, status, __func__, __LINE__);
+        HYPHA_IP_REPORT(context, status);
+        return status;
     }
     context->statistics.frames.acquires++;
     // receive a frame from the ethernet driver
     status = context->external.receive(context->theirs, frame);
-    context->external.report(context->theirs, status, __func__, __LINE__);
+    HYPHA_IP_REPORT(context, status);
     // receive the frame with the stack
     status = HyphaIpEthernetReceiveFrame(context, frame);
-    context->external.report(context->theirs, status, __func__, __LINE__);
+    HYPHA_IP_REPORT(context, status);
     // release the frame back to the client
     status = context->external.release(context->theirs, frame);
-    context->external.report(context->theirs, status, __func__, __LINE__);
+    HYPHA_IP_REPORT(context, status);
     if (HyphaIpIsSuccess(status)) {
         context->statistics.frames.releases++;
     } else {
@@ -124,3 +126,13 @@ HyphaIpStatistics_t const *HyphaIpGetStatistics(HyphaIpContext_t context) {
     }
     return &context->statistics;
 }
+
+size_t HyphaIpGetCompiledMTU(void) { return HYPHA_IP_MTU; }
+
+size_t HyphaIpGetCompiledTTL(void) { return HYPHA_IP_TTL; }
+
+size_t HyphaIpGetCompiledVLANID(void) { return HYPHA_IP_VLAN_ID; }
+
+bool HyphaIpGetCompiledIPv4Filtering(void) { return (HYPHA_IP_USE_IP_FILTER == 1); }
+
+bool HyphaIpGetCompiledEthernetFiltering(void) { return (HYPHA_IP_USE_MAC_FILTER == 1); }

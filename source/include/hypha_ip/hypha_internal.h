@@ -73,6 +73,7 @@
 #endif
 
 static_assert(HYPHA_IP_MTU >= 64U, "The MTU must be greater than 64 bytes");
+static_assert((HYPHA_IP_MTU % sizeof(uint16_t)) == 0, "MTU must be whole number of uint16_t's for Hypha IP stack");
 static_assert(HYPHA_IP_TTL > 0U, "The TTL must be greater than 0");
 static_assert(HYPHA_IP_ARP_TABLE_SIZE > 0U, "The ARP table size must be greater than 0");
 static_assert(HYPHA_IP_IPv4_FILTER_TABLE_SIZE > 0U, "The IP filter table size must be greater than 0");
@@ -80,17 +81,17 @@ static_assert(HYPHA_IP_MAC_FILTER_TABLE_SIZE > 0U, "The MAC filter table size mu
 static_assert(HYPHA_IP_EXPIRATION_TIME > 0U, "The expiration time must be greater than 0");
 static_assert(HYPHA_IP_VLAN_ID >= 0U && HYPHA_IP_VLAN_ID <= 4095U, "The VLAN ID must be 0 <= x <= (2^12)-1");
 static_assert(HYPHA_IP_ALLOW_ANY_BROADCAST == 0 || HYPHA_IP_ALLOW_ANY_BROADCAST == 1,
-              "HYPHA_IP_ALLOW_ANY_BROADCAST must be 0 or 1 to enable or disable broadcast support");
+              "HYPHA_IP_ALLOW_ANY_BROADCAST must be 0 or 1 to disable or enable broadcast support");
 static_assert(HYPHA_IP_ALLOW_ANY_MULTICAST == 0 || HYPHA_IP_ALLOW_ANY_MULTICAST == 1,
-              "HYPHA_IP_ALLOW_ANY_MULTICAST must be 0 or 1 to enable or disable multicast support");
+              "HYPHA_IP_ALLOW_ANY_MULTICAST must be 0 or 1 to disable or enable multicast support");
 static_assert(HYPHA_IP_USE_MAC_FILTER == 0 || HYPHA_IP_USE_MAC_FILTER == 1,
               "HYPHA_IP_USE_MAC_FILTER must be 0 or 1 to enable or disable MAC filtering");
 static_assert(HYPHA_IP_USE_IP_FILTER == 0 || HYPHA_IP_USE_IP_FILTER == 1,
-              "HYPHA_IP_USE_IP_FILTER must be 0 or 1 to enable or disable IP filtering");
+              "HYPHA_IP_USE_IP_FILTER must be 0 or 1 to disable or enable IP filtering");
 static_assert(HYPHA_IP_USE_ARP_CACHE == 0 || HYPHA_IP_USE_ARP_CACHE == 1,
-              "HYPHA_IP_USE_ARP_CACHE must be 0 or 1 to enable or disable ARP caching");
+              "HYPHA_IP_USE_ARP_CACHE must be 0 or 1 to disable or enable ARP caching");
 static_assert(HYPHA_IP_USE_VLAN == 0 || HYPHA_IP_USE_VLAN == 1,
-              "HYPHA_IP_USE_VLAN must be 0 or 1 to enable or disable VLAN support");
+              "HYPHA_IP_USE_VLAN must be 0 or 1 to disable or enable VLAN support");
 
 /// The Checksum enumeration special values
 typedef enum HyphaIpChecksum : uint16_t {
@@ -127,13 +128,16 @@ typedef struct HyphaIpIPv4Header {
 } HyphaIpIPv4Header_t;
 static_assert(sizeof(HyphaIpIPv4Header_t) == 20U, "Must be this size, no options allowed");
 
+/// The maximum number of bytes for an IP Packet Payload
+#define HYPHA_IP_MAX_IP_LENGTH (HYPHA_IP_MAX_ETHERNET_FRAME_SIZE)
+
 /// The maximum number of bytes for a IP packet
-#define HYPHA_IP_MAX_IP_PACKET_SIZE (HYPHA_IP_MAX_ETHERNET_FRAME_SIZE - sizeof(HyphaIpIPv4Header_t))
+#define HYPHA_IP_MAX_IP_PAYLOAD_SIZE (HYPHA_IP_MAX_IP_LENGTH - sizeof(HyphaIpIPv4Header_t))
 
 /// The IPv4 Packet
 typedef struct HyphaIpIPv4Packet {
-    HyphaIpIPv4Header_t header;                    ///< the IPv4 Header
-    uint8_t payload[HYPHA_IP_MAX_IP_PACKET_SIZE];  ///< The IPv4 Payload, usually is the UDP datagram.
+    HyphaIpIPv4Header_t header;                     ///< the IPv4 Header
+    uint8_t payload[HYPHA_IP_MAX_IP_PAYLOAD_SIZE];  ///< The IPv4 Payload, usually is the UDP datagram.
 } HyphaIpIPv4Packet_t;
 
 /// The UDP Header Definition
@@ -142,15 +146,20 @@ typedef struct HyphaIpUDPHeader {
     uint16_t destination_port;  ///<  Destination Port, usually matters
     uint16_t length;            ///<  In Bytes
     uint16_t checksum;          ///<  Over data as uint16_t's!
-} HyphaIpUdpHeader_t;
+} HyphaIpUDPHeader_t;
 
 /// The maximum number of bytes for a UDP datagram
-#define HYPHA_IP_MAX_UDP_DATAGRAM_SIZE (HYPHA_IP_MAX_IP_PACKET_SIZE - sizeof(HyphaIpUdpHeader_t))
+#define HYPHA_IP_MAX_UDP_LENGTH (HYPHA_IP_MAX_IP_PAYLOAD_SIZE)
+/// The maximum number of bytes for a UDP datagram payload
+#define HYPHA_IP_MAX_UDP_PAYLOAD_SIZE (HYPHA_IP_MAX_UDP_LENGTH - sizeof(HyphaIpUDPHeader_t))
+static_assert(HYPHA_IP_MAX_UDP_PAYLOAD_SIZE > 0U, "The maximum UDP datagram size must be greater than 0");
+static_assert((HYPHA_IP_MAX_UDP_PAYLOAD_SIZE % sizeof(uint16_t)) == 0U,
+              "The maximum UDP datagram size must be a whole number of uint16_t's for Hypha IP stack");
 
 /// The UDP Datagram definition
 typedef struct HyphaIpUDPDatagram {
-    HyphaIpUdpHeader_t header;                        ///< The UDP Header
-    uint8_t payload[HYPHA_IP_MAX_UDP_DATAGRAM_SIZE];  ///< The UDP Payload
+    HyphaIpUDPHeader_t header;                       ///< The UDP Header
+    uint8_t payload[HYPHA_IP_MAX_UDP_PAYLOAD_SIZE];  ///< The UDP Payload
 } HyphaIpUdpDatagram_t;
 
 /// The List of ICMP Types
@@ -246,7 +255,7 @@ typedef struct HyphaIpPseudoHeader {
     uint8_t zero;                      ///<  A reserved tree
     uint8_t protocol;                  ///<  Likely UDP here
     uint16_t length;                   ///<  The length of the packet in bytes
-    HyphaIpUdpHeader_t header;         ///<  The UDP Header
+    HyphaIpUDPHeader_t header;         ///<  The UDP Header
 } HyphaIpPseudoHeader_t;
 
 /// The IGMP Packet
@@ -317,13 +326,13 @@ struct HyphaIpContext {
 size_t HyphaIpOffsetOfIPHeader(void);
 
 /// @return The offset of the UDP Header in the Ethernet Frame
-size_t HyphaIpOffsetOfUpdHeader(void);
+size_t HyphaIpOffsetOfUDPHeader(void);
 
 /// @return The offset of the ICMP Datagram in the Ethernet Frame
-size_t HyphaIpOffsetOfIcmpDatagram(void);
+size_t HyphaIpOffsetOfICMPDatagram(void);
 
 /// @return The offset of the UDP Datagram in the Ethernet Frame
-size_t HyphaIpOffsetOfUpdDatagram(void);
+size_t HyphaIpOffsetOfUDPPayload(void);
 
 /// @return True if the Ethernet Addresses are the same, false otherwise
 bool HyphaIpIsSameEthernetAddress(HyphaIpEthernetAddress_t mac1, HyphaIpEthernetAddress_t mac2);
@@ -394,13 +403,22 @@ bool HyphaIpIsMulticastIPv4Address(HyphaIpIPv4Address_t address);
 /// @return True if the address is a reserved address, false otherwise
 bool HyphaIpIsReservedIPv4Address(HyphaIpIPv4Address_t address);
 
+/// @param frame The Ethernet Frame to get the span from
 /// @return A span covering the IP Header within the Ethernet Frame
 HyphaIpSpan_t HyphaIpSpanIpHeader(HyphaIpEthernetFrame_t *frame);
 
+/// @param frame The Ethernet Frame to get the span from
 /// @return A span covering the UDP Header within the Ethernet Frame
 HyphaIpSpan_t HyphaIpSpanUdpHeader(HyphaIpEthernetFrame_t *frame);
 
-/// @return A span covering the UDP Payload of the Datagram within the Ethernet Frame
+/// @brief A Span covering the UDP Datagram (header + payload) within the Ethernet Frame
+/// @param frame The Ethernet Frame to get the span from
+/// @return A Span covering the UDP Datagram
+HyphaIpSpan_t HyphaIpSpanUdpDatagram(HyphaIpEthernetFrame_t *frame);
+
+/// @param frame The Ethernet Frame to get the span from
+/// @return A span covering the entire, max UDP Payload (not the header) of the Datagram within the Ethernet Frame
+/// @note Users should fill in the data and then call @ref HyphaIpSpanResize to set the size of the payload.
 HyphaIpSpan_t HyphaIpSpanUdpPayload(HyphaIpEthernetFrame_t *frame);
 
 /// @brief Copies the Ethernet Header from the frame to the destination.
@@ -426,22 +444,22 @@ void HyphaIpCopyIPHeaderToFrame(HyphaIpEthernetFrame_t *dst, HyphaIpIPv4Header_t
 /// @brief Copies the UDP Header from the Ethernet Frame
 /// @param dst The destination UDP Header
 /// @param src The source Ethernet Frame
-void HyphaIpCopyUdpHeaderFromFrame(HyphaIpUdpHeader_t *dst, HyphaIpEthernetFrame_t *src);
+void HyphaIpCopyUdpHeaderFromFrame(HyphaIpUDPHeader_t *dst, HyphaIpEthernetFrame_t *src);
 
 /// @brief Copies the UDP Header to the Ethernet Frame
 /// @param dst The destination Ethernet Frame
 /// @param src The source UDP Header
-void HyphaIpCopyUdpHeaderToFrame(HyphaIpEthernetFrame_t *dst, HyphaIpUdpHeader_t const *src);
+void HyphaIpCopyUdpHeaderToFrame(HyphaIpEthernetFrame_t *dst, HyphaIpUDPHeader_t const *src);
 
-/// @brief Copies the UDP Datagram from the Ethernet Frame
-/// @param dst The destination UDP Datagram
+/// @brief Copies the UDP Datagram (not the header) from the Ethernet Frame
+/// @param span The span of the area to copy the UDP Datagram to.
 /// @param src The source Ethernet Frame
-void HyphaIpCopyUdpDatagramFromFrame(uint8_t *dst, HyphaIpEthernetFrame_t *src);
+void HyphaIpCopyUdpPayloadFromFrame(HyphaIpSpan_t span, HyphaIpEthernetFrame_t *src);
 
-/// @brief Copies the UDP Datagram to the Ethernet Frame
+/// @brief Copies the UDP Datagram (not the header) to the Ethernet Frame
 /// @param dst The destination Ethernet Frame
 /// @param span The span of the UDP Datagram to copy
-void HyphaIpCopyUdpDatagramToFrame(HyphaIpEthernetFrame_t *dst, HyphaIpSpan_t span);
+void HyphaIpCopyUdpPayloadToFrame(HyphaIpEthernetFrame_t *dst, HyphaIpSpan_t span);
 
 /// @brief Copies the ICMP Header from the Ethernet Frame
 /// @param dst The destination ICMP Header
@@ -610,13 +628,30 @@ HyphaIpStatus_e HyphaIpLeaveGroup(HyphaIpContext_t context, HyphaIpIPv4Address_t
 /// be 100% short-flipped versions.
 uint16_t HyphaIpComputeChecksum(HyphaIpSpan_t header_span, HyphaIpSpan_t payload_span);
 
-/// The Hypha IP Debug Printing macro with Mask
-#define HYPHA_DEBUG(context, mask, format, ...)                                                 \
+/// The Hypha IP Report macro
+#define HYPHA_IP_REPORT(_context, _status)                                                      \
     {                                                                                           \
-        if (context->external.printer && ((context->debugging.mask.fields.layer & mask) > 0) && \
-            ((context->debugging.mask.fields.level & mask) > 0)) {                              \
-            context->external.printer(context->theirs, format, ##__VA_ARGS__);                  \
+        if (_context && _context->external.report) {                                            \
+            _context->external.report(_context->theirs, _status, __func__, __FILE__, __LINE__); \
         }                                                                                       \
+    }
+
+/// The Hypha IP Debugging macro with Mask
+#define HYPHA_IP_DO(_context, _level, _layer, _BLOCK)                     \
+    {                                                                     \
+        if (_context && _context->debugging.mask.fields.layer & _layer && \
+            _context->debugging.mask.fields.level & _level) {             \
+            _BLOCK;                                                       \
+        }                                                                 \
+    }
+
+/// The Hypha IP Debug Printing macro with Mask
+#define HYPHA_IP_PRINT(_context, _level, _layer, _format, ...)                                                \
+    {                                                                                                         \
+        if (_context && _context->external.print && ((_context->debugging.mask.fields.layer & _layer) > 0) && \
+            ((_context->debugging.mask.fields.level & _level) > 0)) {                                         \
+            _context->external.print(_context->theirs, _format, __VA_ARGS__);                                 \
+        }                                                                                                     \
     }
 
 #endif  // HYPHA_IP_INTERNAL_H_
