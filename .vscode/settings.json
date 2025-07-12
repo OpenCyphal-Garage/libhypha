@@ -36,7 +36,7 @@
         "build/compile_commands.json",
     ],
     "C_Cpp.formatting": "clangFormat",
-    "C_Cpp.doxygen.generatedStyle": "/*!",
+    "C_Cpp.doxygen.generatedStyle": "///",
     "C_Cpp.codeAnalysis.clangTidy.enabled": true,
     "editor.formatOnSave": true,
     "cSpell.customDictionaries": {
@@ -48,5 +48,8 @@
         },
         "custom": true, // Enable the `custom` dictionary
         "internal-terms": false // Disable the `internal-terms` dictionary
-    }
+    },
+    "cmake.buildArgs": [
+        "--verbose"
+    ]
 }

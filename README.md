@@ -65,7 +65,20 @@ Using a host compiler, build
 
 ```bash
 cmake -B build -S .
+cmake --build build --target all
 cmake --build build --target test
+```
+
+### Coverage
+
+Creates a coverage report on the Unity Test.
+
+```bash
+cmake -B build -S .
+cmake --build build --target all
+cmake --build build --target test
+cmake --build build --target coverage
+open build/coverage/coverage-hypha_ip_test/index.html
 ```
 
 ### Documentation

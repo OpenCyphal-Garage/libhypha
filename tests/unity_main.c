@@ -12,6 +12,8 @@ void setUp(void) { hyphaip_setUp(); }
 
 void tearDown(void) { hyphaip_tearDown(); }
 
+extern void hyphaip_test_Constants(void);
+extern void hyphaip_test_Span(void);
 extern void hyphaip_test_NormalChecksum(void);
 extern void hyphaip_test_FlippedChecksum(void);
 extern void hyphaip_test_NormalChecksum2(void);
@@ -32,9 +34,11 @@ extern void hyphaip_test_Flip32(void);
 extern void hyphaip_test_Flip64(void);
 extern void hyphaip_test_PopulateArpTable(void);
 extern void hyphaip_test_PopulateEthernetFilter(void);
+extern void hyphaip_test_PopulateIpFilter(void);
 extern void hyphaip_test_ConvertMulticast(void);
 extern void hyphaip_test_PrepareMulticast(void);
 extern void hyphaip_test_BadRunOnce(void);
+extern void hyphaip_test_CheckOffsets(void);
 extern void hyphaip_test_ReceiveOneFrame(void);
 extern void hyphaip_test_TransmitOneFrame(void);
 extern void hyphaip_test_TransmitReceiveLocalhost(void);
@@ -43,7 +47,8 @@ extern void hyphaip_test_TransmitOneLargeFrame(void);
 
 int main(void) {
     UNITY_BEGIN();
-
+    RUN_TEST(hyphaip_test_Constants);
+    RUN_TEST(hyphaip_test_Span);
     RUN_TEST(hyphaip_test_NormalChecksum);
     RUN_TEST(hyphaip_test_NormalChecksum2);
     RUN_TEST(hyphaip_test_FlippedChecksum);
@@ -64,9 +69,11 @@ int main(void) {
     RUN_TEST(hyphaip_test_ConvertMulticast);
     RUN_TEST(hyphaip_test_Contextless);
     RUN_TEST(hyphaip_test_BadRunOnce);
+    RUN_TEST(hyphaip_test_CheckOffsets);
     RUN_TEST(hyphaip_test_PopulateArpTable);
     RUN_TEST(hyphaip_test_PopulateEthernetFilter);
     RUN_TEST(hyphaip_test_PrepareMulticast);
+    RUN_TEST(hyphaip_test_PopulateIpFilter);
     RUN_TEST(hyphaip_test_ReceiveOneFrame);
     RUN_TEST(hyphaip_test_TransmitOneFrame);
     RUN_TEST(hyphaip_test_TransmitReceiveLocalhost);

@@ -7,8 +7,44 @@
 /// definitions and structures necessary to use the stack.
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// @page HighLevel High Level Overview
+/// @section Overview Overview
+/// Users of this library need to provide:
+/// <ol>
+/// <li> an instance of the @ref HyphaIpExternalInterface_t. a set of basic functions that the library needs to use.
+/// Each of these will be given the pointer to the external context via the HyphaIpExternalContext_t.
+/// <li> a definition of the @ref HyphaIpExternalContext_t structure for your functions.
+/// <li> an instance of the @ref HyphaIpNetworkInterface_t structure for your network interface.
+/// <li> an instance of the @ref HyphaIpContext_t variable, which is opaque to the user.
+/// </ol>
+/// @section External Context
+/// @section User Provided Definitions
+/// Users must fill in the @ref HyphaIpExternalInterface_t structure with their own functions.
+/// <ol>
+/// <li> @ref HyphaIpAcquireEthernetFrame_f
+/// <li> @ref HyphaIpReleaseEthernetFrame_f
+/// <li> @ref HyphaIpEthernetReceiveFrame_f
+/// <li> @ref HyphaIpEthernetTransmitFrame_f
+/// <li> @ref HyphaIpGetMonotonicTimestamp_f
+/// <li> @ref HyphaIpReport_f
+/// <li> @ref HyphaIpUdpDatagramListener_f
+/// <li> @ref HyphaIpPrinter_f
+/// @cond USE_ICMP <li> @ref HyphaIpIcmpDatagramListener_f @endcond
+/// </ol>
+/// This is an example set of functions.
+/// @snippet examples/hypha_ip_lifecycle.c Hypha IP User Provided Definitions
+/// @section Network Interface
+/// An example network setup. This is a Ethernet interface with a MAC address, an IPv4 address, a netmask and a gateway.
+/// @snippet examples/hypha_ip_lifecycle.c Hypha IP Network Interface Example
 /// @section Example Lifecycle
 /// @snippet examples/hypha_ip_lifecycle.c Hypha IP Lifecycle Example
+/// @section HardwareConsiderations Hardware Considerations
+/// The Hypha IP stack is designed to be used with a hardware Ethernet interface. However many such interfaces
+/// provide some level of functionality to handle filters, checksums and other features which overlap with Hypha. This
+/// is why these are configurable in the Hypha IP stack. If you find that your hardware does not support a specific
+/// feature, you can enable the software implementation of that feature by defining the appropriate macro in your build
+/// system and vice versa.
+/// @warning It should go without saying that the software implementation of these features will be slower than
+/// the hardware implementation.
 /// @page CodingPolicy Coding Policy
 /// @section General General
 /// <ol>
@@ -87,7 +123,7 @@ typedef struct HyphaIpEthernetAddress {
 static_assert(sizeof(HyphaIpEthernetAddress_t) == 6U, "Must be exactly this size");
 
 /// For use with printf-like format strings for Ethernet Addresses
-#define PRIuEthernetAddress "%02x:%02x:%02x:%02x:%02x:%02x"
+#define PRIuEthernetAddress "%02X:%02X:%02X:%02X:%02X:%02X"
 
 /// The 802.3 Ethernet Frame Header
 typedef struct HyphaIpEthernetHeader {
@@ -154,30 +190,31 @@ typedef struct HyphaIpAddressMatch {
 /// @brief The types of pointers in a Span.
 /// These are limited due to the space in the field. Complex structures should use
 /// either Undefined or Uint8_t
-enum HyphaIpSpanType {
+typedef enum HyphaIpSpanType {
+    /// Undefined type, used for empty spans or spans that have a structured type but not mentioned here.
     HyphaIpSpanTypeUndefined = 0,
-    HyphaIpSpanTypeChar = 1,  ///<  Does not count the nul!
-    HyphaIpSpanTypeShort = 2,
-    HyphaIpSpanTypeInt = 3,
-    HyphaIpSpanTypeLong = 4,
-    HyphaIpSpanTypeLongLong = 5,
-    HyphaIpSpanTypeFloat = 6,
-    HyphaIpSpanTypeDouble = 7,
-    HyphaIpSpanTypeInt8_t = 8,
-    HyphaIpSpanTypeInt16_t = 9,
-    HyphaIpSpanTypeInt32_t = 10,
-    HyphaIpSpanTypeInt64_t = 11,
-    HyphaIpSpanTypeUint8_t = 12,
-    HyphaIpSpanTypeUint16_t = 13,
-    HyphaIpSpanTypeUint32_t = 14,
-    HyphaIpSpanTypeUint64_t = 15,
-};
+    HyphaIpSpanTypeChar = 1,       ///< "C" `char`. Does not count the nul!
+    HyphaIpSpanTypeShort = 2,      ///< "C" `short1s
+    HyphaIpSpanTypeInt = 3,        ///< "C" `int`s
+    HyphaIpSpanTypeLong = 4,       ///< "C" `long`
+    HyphaIpSpanTypeLongLong = 5,   ///< "C" `long long`
+    HyphaIpSpanTypeFloat = 6,      ///< 4-byte floating point number
+    HyphaIpSpanTypeDouble = 7,     ///< 8-byte floating point number
+    HyphaIpSpanTypeInt8_t = 8,     ///< 1-byte signed integer
+    HyphaIpSpanTypeInt16_t = 9,    ///< 2-byte signed integer
+    HyphaIpSpanTypeInt32_t = 10,   ///< 4-byte signed integer
+    HyphaIpSpanTypeInt64_t = 11,   ///< 8-byte signed integer
+    HyphaIpSpanTypeUint8_t = 12,   ///< 1-byte unsigned integer
+    HyphaIpSpanTypeUint16_t = 13,  ///< 2-byte unsigned integer
+    HyphaIpSpanTypeUint32_t = 14,  ///< 4-byte unsigned integer
+    HyphaIpSpanTypeUint64_t = 15,  ///< 8-byte unsigned integer
+} HyphaIpSpanType_e;
 
 /// A simple pointer, length and type structure
 typedef struct HyphaIpSpan {
     void *pointer;        ///<  The pointer to the address
     uint32_t count : 28;  ///<  Up to 2^28-1
-    uint32_t type : 4;    ///<  @see HyphaIpSpanType The type of the pointer and unit
+    uint32_t type : 4;    ///<  @see HyphaIpSpanType_e The type of the pointer and unit
 } HyphaIpSpan_t;
 
 /// A default span which is empty and undefined.
@@ -298,32 +335,39 @@ extern const HyphaIpIPv4Address_t hypha_ip_igmpv3;
 
 /// The list of possible Hypha IP Status codes
 typedef enum HyphaIpStatus {
-    HyphaIpStatusOk = 0,
-    HyphaIpStatusFailure = -1,
-    HyphaIpStatusNotImplemented = -2,
-    HyphaIpStatusInvalidContext = -3,
-    HyphaIpStatusOutOfMemory = -4,
-    HyphaIpStatusArpTableFull = -5,
-    HyphaIpStatusBusy = -6,
-    HyphaIpStatusInvalidArgument = -7,  ///<  Other than the Context
-    HyphaIpStatusMacRejected = -8,
-    HyphaIpStatusEthernetTypeRejected = -9,
-    HyphaIpStatusIPv4ChecksumRejected = -10,
-    HyphaIpStatusIPv4HeaderRejected = -11,
-    HyphaIpStatusIPv4DestinationRejected = -12,
-    HyphaIpStatusIPv4SourceRejected = -13,
-    HyphaIpStatusUDPChecksumRejected = -14,
-    HyphaIpStatusInvalidNetwork = -15,
-    HyphaIpStatusUnsupportedProtocol = -16,
-    HyphaIpStatusInvalidSpan = -17,
-    HyphaIpStatusInvalidMacAddress = -18,
-    HyphaIpStatusInvalidIpAddress = -20,
+    HyphaIpStatusOk = 0,               ///<  The operation was successful
+    HyphaIpStatusFailure = -1,         ///< The operation failed, but the reason is not specified
+    HyphaIpStatusNotImplemented = -2,  ///< The operation is not implemented in this version of the stack
+    HyphaIpStatusInvalidContext = -3,  ///< The context is invalid or null
+    HyphaIpStatusOutOfMemory = -4,     ///< The operation failed due to insufficient memory
+    HyphaIpStatusArpTableFull = -5,    ///< The ARP table is full and cannot accept more entries
+    HyphaIpStatusBusy = -6,  ///< The operation cannot be performed because the stack is busy or in an invalid state
+    HyphaIpStatusInvalidArgument = -7,  ///< An argument other than the Context is invalid
+    HyphaIpStatusMacRejected = -8,      ///< The MAC address was rejected, possibly due to a filter or invalid format
+    HyphaIpStatusEthernetTypeRejected =
+        -9,  ///< The Ethernet type was rejected, possibly due to a filter or unsupported type
+    HyphaIpStatusIPv4ChecksumRejected = -10,  ///< The IPv4 checksum was rejected, indicating a malformed packet
+    HyphaIpStatusIPv4HeaderRejected =
+        -11,  ///< The IPv4 header was rejected, possibly due to a filter or invalid format
+    HyphaIpStatusIPv4DestinationRejected =
+        -12,  ///< The IPv4 destination address was rejected, possibly due to a filter or invalid format
+    HyphaIpStatusIPv4SourceRejected =
+        -13,  ///< The IPv4 source address was rejected, possibly due to a filter or invalid format
+    HyphaIpStatusUDPChecksumRejected = -14,  ///< The UDP checksum was rejected, indicating a malformed packet
+    HyphaIpStatusInvalidNetwork =
+        -15,  ///< The source network is invalid, possibly due to a filter or unsupported network type
+    HyphaIpStatusUnsupportedProtocol = -16,      ///< The protocol is not supported by the stack
+    HyphaIpStatusInvalidSpan = -17,              ///< The span was invalid
+    HyphaIpStatusInvalidMacAddress = -18,        ///< The MAC address was not a valid address
+    HyphaIpStatusInvalidIpAddress = -20,         ///< The IPv4 address was not a valid address
     HyphaIpStatusNotSupported = -21,             ///<  The requested feature is not supported by the implementation
     HyphaIpStatusArpResolutionFailed = -22,      ///<  The ARP resolution failed for the given address
     HyphaIpStatusEthernetFilterTableFull = -23,  ///<  The Ethernet filter table is full and cannot accept more entries
     HyphaIpStatusIPv4FilterTableFull = -24,      ///<  The IPv4 filter table is full and cannot accept more entries
     HyphaIpStatusIPv4SourceFiltered = -25,       ///<  The source address was filtered out
     HyphaIpStaticVLANFiltered = -26,             ///<  The VLAN ID was filtered out
+    HyphaIpStatusIPv4PacketTooLarge = -27,       ///<  The IPv4 packet was too large to be processed
+    HyphaIpStatusUdpDatagramTooLarge = -28,      ///<  The UDP datagram was too large to be processed
 } HyphaIpStatus_e;
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -334,6 +378,16 @@ typedef enum HyphaIpStatus {
 bool HyphaIpIsSuccess(HyphaIpStatus_e status);
 /// @return True if the status is not successful, false otherwise.
 bool HyphaIpIsFailure(HyphaIpStatus_e status);
+/// @return The MTU as given at compile time.
+size_t HyphaIpGetCompiledMTU(void);
+/// @return The default TTL as given at compile time.
+size_t HyphaIpGetCompiledTTL(void);
+/// @return The VLAN ID as given at compile time.
+size_t HyphaIpGetCompiledVLANID(void);
+/// @return True if IPv4 filtering has been compiled in and enabled, false otherwise.
+bool HyphaIpGetCompiledIPv4Filtering(void);
+/// @return True if Ethernet filtering has been compiled in and enabled, false otherwise.
+bool HyphaIpGetCompiledEthernetFiltering(void);
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // Contextual API
@@ -383,10 +437,16 @@ void HyphaIpPrintArray08(HyphaIpContext_t context, size_t len, uint8_t data[len]
 void HyphaIpSpanPrint(HyphaIpContext_t context, HyphaIpSpan_t span);
 
 /// @return The number of bytes that the span contains
-size_t HyphaIpSizeOfSpan(HyphaIpSpan_t span);
+size_t HyphaIpSpanSize(HyphaIpSpan_t span);
 
 /// Determines if the span is empty
 bool HyphaIpSpanIsEmpty(HyphaIpSpan_t span);
+
+/// Resizes a span to a new size which can only be less than or equal to the current size.
+/// @param span The span to resize
+/// @param new_size The new size of the span in bytes
+/// @return True if the resize was successful, false otherwise.
+bool HyphaIpSpanResize(HyphaIpSpan_t *span, uint32_t new_size);
 
 /// Counts the number of accepted and rejects at a specific layer of the stack
 typedef struct HyphaIpLayerResult {
@@ -437,6 +497,8 @@ typedef struct HyphaIpStatistics {
     HyphaIpLayerResult_t ethertype;  ///< Ethernet Type statistics
     HyphaIpLayerResult_t ip;         ///< IPv4 Layer statistics
     HyphaIpLayerResult_t udp;        ///< UDP Layer statistics
+    HyphaIpLayerResult_t icmp;       ///< ICMP Layer statistics
+    HyphaIpLayerResult_t igmp;       ///< IGMP Layer statistics
     HyphaIpLayerResult_t unknown;    ///< Unknown protocols, not supported
     HyphaIpArpCounter_t arp;         ///< ARP Layer statistics
     HyphaIpCounter_t counter;        ///< The throughput statistics for each layer
@@ -477,6 +539,14 @@ typedef struct HyphaIpPrintInfo {
         } fields;                 ///<  The print mask fields structure
     } mask;                       ///< The union of a full mask and a set of subfields
 } HyphaIpPrintInfo_t;
+
+#ifndef HYPHA_IP_DEBUG_MASK
+/// The default debug mask for the Hypha IP stack. Provide a custom value in your build system to override this as a
+/// 16bit hex value
+#define HYPHA_IP_DEBUG_MASK                                                               \
+    (uint32_t)((HyphaIpPrintLevelError | HyphaIpPrintLevelWarn | HyphaIpPrintLevelInfo) | \
+               ((HyphaIpPrintLayerUDP | HyphaIpPrintLayerIPv4) << 8U))
+#endif
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // EXTERN (The required interfaces which we depend on)
@@ -529,12 +599,25 @@ typedef HyphaIpTimestamp_t (*HyphaIpGetMonotonicTimestamp_f)(HyphaIpExternalCont
 /// @retval HyphaIpStatusOk Datagram was received and is acceptable.
 /// @retval HyphaIpStatusFailure
 /// @retval HyphaIpStatus Size or pointer/array is invalid
+/// @note It should be safe to call @ref HyphaIpTransmitUdpDatagram from within this callback, so long as the
+/// allocator can spare another frame.
 typedef HyphaIpStatus_e (*HyphaIpUdpDatagramListener_f)(HyphaIpExternalContext_t context, HyphaIpMetaData_t *metadata,
                                                         HyphaIpSpan_t datagram);
 
 /// Used to report internal issues all the way out of the API to an observer.
 typedef void (*HyphaIpReport_f)(HyphaIpExternalContext_t context, HyphaIpStatus_e status, char const *const func,
-                                unsigned int line);
+                                char const *const file, unsigned int line);
+
+#if defined(HYPHA_IP_USE_ICMP) || defined(HYPHA_IP_USE_ICMPv6)
+/// @brief The callback provided by the Client for ICMP datagrams.
+/// @param context The handle to the context of the stack
+/// @param metadata The metadata of the incoming ICMP datagram
+/// @param datagram The ICMP Datagram
+/// @retval HyphaIpStatusOk Datagram was received and is acceptable.
+/// @retval HyphaIpStatusFailure The Datagram was not acceptable, or the function failed.
+typedef HyphaIpStatus_e (*HyphaIpIcmpDatagramListener_f)(HyphaIpExternalContext_t context, HyphaIpMetaData_t *metadata,
+                                                         HyphaIpSpan_t datagram);
+#endif
 
 /// The function pointers to user defined interfaces used by the stack
 typedef struct HyphaIpExternalInterface {
@@ -546,6 +629,9 @@ typedef struct HyphaIpExternalInterface {
     HyphaIpGetMonotonicTimestamp_f get_monotonic_timestamp;  ///< The interface to get the monotonic timestamp
     HyphaIpReport_f report;                                  ///< The interface to report errors deep within functions
     HyphaIpUdpDatagramListener_f receive_udp;                ///< The interface to receive UDP datagrams
+#if defined(HYPHA_IP_USE_ICMP) || defined(HYPHA_IP_USE_ICMPv6)
+    HyphaIpIcmpDatagramListener_f receive_icmp;  ///< The interface to receive ICMP datagrams
+#endif
 } HyphaIpExternalInterface_t;
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -639,5 +725,47 @@ HyphaIpStatus_e HyphaIpPrepareUdpReceive(HyphaIpContext_t context, HyphaIpIPv4Ad
 /// @param[in] port The port to transmit to (destination, not source)
 /// @return The status of the operation
 HyphaIpStatus_e HyphaIpPrepareUdpTransmit(HyphaIpContext_t context, HyphaIpIPv4Address_t address, uint16_t port);
+
+#if defined(HYPHA_IP_USE_ICMP) || defined(HYPHA_IP_USE_ICMPv6)
+
+/// @brief The types of ICMP Types.
+typedef enum HyphaIpIcmpType {
+    HyphaIpIcmpTypeEchoReply = 0,               ///< ICMP Echo Reply
+    HyphaIpIcmpTypeDestinationUnreachable = 3,  ///< ICMP Destination Unreachable
+    HyphaIpIcmpTypeSourceQuench = 4,            ///< ICMP Source Quench
+    HyphaIpIcmpTypeRedirect = 5,                ///< ICMP Redirect
+    HyphaIpIcmpTypeEchoRequest = 8,             ///< ICMP Echo Request
+    HyphaIpIcmpTypeTimeExceeded = 11,           ///< ICMP Time Exceeded
+    HyphaIpIcmpTypeParameterProblem = 12,       ///< ICMP Parameter Problem
+} HyphaIpIcmpType_e;
+
+/// @brief The ICMP Code for the ICMP Type.
+typedef enum HyphaIpIcmpCode {
+    HyphaIpIcmpCodeNoCode = 0,                                    ///< No code, used for Echo Reply and Echo Request
+    HyphaIpIcmpCodeNetworkUnreachable = 0,                        ///< Network Unreachable
+    HyphaIpIcmpCodeHostUnreachable = 1,                           ///< Host Unreachable
+    HyphaIpIcmpCodeProtocolUnreachable = 2,                       ///< Protocol Unreachable
+    HyphaIpIcmpCodePortUnreachable = 3,                           ///< Port Unreachable
+    HyphaIpIcmpCodeFragmentationRequired = 4,                     ///< Fragmentation Required
+    HyphaIpIcmpCodeSourceRouteFailed = 5,                         ///< Source Route Failed
+    HyphaIpIcmpCodeDestinationNetworkUnknown = 6,                 ///< Destination Network Unknown
+    HyphaIpIcmpCodeDestinationHostUnknown = 7,                    ///< Destination Host Unknown
+    HyphaIpIcmpCodeSourceHostIsolated = 8,                        ///< Destination Host
+    HyphaIpIcmpCodeDestinationNetworkProhibited = 9,              ///< Destination Network Prohibited
+    HyphaIpIcmpCodeDestinationHostProhibited = 10,                ///< Destination Host
+    HyphaIpIcmpCodeDestinationNetworkUnreachableForTos = 11,      ///< Destination Network Unreachable for TOS
+    HyphaIpIcmpCodeDestinationHostUnreachableForTos = 12,         ///< Destination Host Unreachable for TOS
+    HyphaIpIcmpCodeCommunicationAdministrativelyProhibited = 13,  ///< Communication Administratively Prohibited
+    HyphaIpIcmpCodeHostPrecedenceViolation = 14,                  ///< Host Precedence Violation
+    HyphaIpIcmpCodePrecedenceCutoffInEffect = 15,                 ///< Precedence Cutoff In Effect
+} HyphaIpIcmpCode_e;
+
+/// @brief Sends an ICMP Echo Request to the given destination.
+/// @param context The opaque context
+/// @param destination The destination IPv4 address
+/// @return The status of the operation
+HyphaIpStatus_e HyphaIpTransmitIcmpDatagram(HyphaIpContext_t context, HyphaIpIcmpType_e type, HyphaIpIcmpCode_e code,
+                                            HyphaIpIPv4Address_t destination);
+#endif  // HYPHA_IP_USE_ICMP || HYPHA_IP_USE_ICMPv6
 
 #endif  // HYPHA_IP_H_

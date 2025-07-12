@@ -8,6 +8,8 @@ set(CMAKE_C_STANDARD 23)
 
 option(BUILD_SHARED_LIBS "Builds libraries as dynamic objects" OFF)
 option(BUILD_UNIT_TESTS "Builds the unit tests" ON)
+option(BUILD_COVERAGE "Builds with coverage support" ON)
+option(BUILD_ANALYSIS "Builds with static analysis support" ON)
 
 ###############################################################
 # Interface Libraries
@@ -26,7 +28,20 @@ target_compile_options(hypha_ip_rules
         -Wunused-parameter -Wunused-variable -Wstrict-prototypes -Wredundant-decls
         -pedantic
         -fdiagnostics-color=always
+        # GNU specific options
+        $<$<AND:$<BOOL:${BUILD_ANALYSIS}>,$<C_COMPILER_ID:GNU>>:-fanalyzer>
+        $<$<AND:$<BOOL:${BUILD_COVERAGE}>,$<C_COMPILER_ID:GNU>>:-ftest-coverage -fcoverage-mapping>
+        # Clang specific options
+        $<$<AND:$<BOOL:${BUILD_ANALYSIS}>,$<C_COMPILER_ID:Clang>>:-Xclang -analyzer-output=text>
+        $<$<AND:$<BOOL:${BUILD_COVERAGE}>,$<C_COMPILER_ID:Clang>>:-fprofile-instr-generate -fprofile-arcs -ftest-coverage -fcoverage-mapping>
+        # AppleClang specific options
+        $<$<AND:$<BOOL:${BUILD_ANALYSIS}>,$<C_COMPILER_ID:AppleClang>>:-Xclang -analyzer-output=text>
+        $<$<AND:$<BOOL:${BUILD_COVERAGE}>,$<C_COMPILER_ID:AppleClang>>:-fprofile-instr-generate -fprofile-arcs -ftest-coverage -fcoverage-mapping>
 )
+target_link_libraries(hypha_ip_rules INTERFACE
+    $<$<BOOL:${BUILD_COVERAGE}>:--coverage>
+)
+
 ###############################################################
 # Static or Dynamic Library
 ###############################################################
@@ -53,7 +68,13 @@ target_include_directories(lib-hypha-ip PUBLIC
 target_include_directories(lib-hypha-ip PRIVATE
     ${CMAKE_SOURCE_DIR}/source/include
 )
-target_link_libraries(lib-hypha-ip INTERFACE hypha_ip_defs hypha_ip_rules)
+target_link_libraries(lib-hypha-ip PUBLIC hypha_ip_defs hypha_ip_rules)
+set_target_properties(lib-hypha-ip PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
+    PUBLIC_HEADER "${CMAKE_SOURCE_DIR}/include/hypha_ip.h"
+)
+
 ###############################################################
 # Unit Tests
 ###############################################################
@@ -78,8 +99,16 @@ target_include_directories(hypha_ip_test PRIVATE
     ${CMAKE_SOURCE_DIR}/source/include
 )
 target_link_libraries(hypha_ip_test PRIVATE lib-hypha-ip unity)
-target_link_libraries(hypha_ip_test INTERFACE  hypha_ip_defs hypha_ip_rules)
-add_test(NAME hypha_ip_test COMMAND hypha_ip_test)
+target_link_libraries(hypha_ip_test INTERFACE hypha_ip_defs hypha_ip_rules)
+
+add_test(NAME HyphaIpUnityTest
+         COMMAND hypha_ip_test
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+if (BUILD_COVERAGE)
+set_tests_properties(HyphaIpUnityTest PROPERTIES
+    ENVIRONMENT LLVM_PROFILE_FILE=$<TARGET_FILE:hypha_ip_test>.profraw
+)
+endif()
 
 ###############################################################
 # Example Application
@@ -88,5 +117,71 @@ add_executable(hypha_ip_example
     ${CMAKE_SOURCE_DIR}/examples/hypha_ip_lifecycle.c
 )
 target_link_libraries(hypha_ip_example PRIVATE lib-hypha-ip)
-endif()
+target_link_libraries(hypha_ip_example INTERFACE hypha_ip_defs hypha_ip_rules)
+endif(BUILD_UNIT_TESTS)
 
+if (BUILD_COVERAGE)
+    find_program(LLVM_PROFDATA llvm-profdata)
+    find_program(LLVM_COV llvm-cov)
+    find_program(GENHTML genhtml)
+
+    if(NOT LLVM_PROFDATA OR NOT LLVM_COV OR NOT GENHTML)
+        message(FATAL_ERROR "Coverage tools not found. Please install llvm-profdata, llvm-cov, and genhtml.")
+    endif()
+
+    function(coverage_target)
+        # Argument parsing
+        set(options "")
+        set(singles TARGET)
+        set(multiples LIBRARIES EXCLUDES)
+        cmake_parse_arguments(
+            ARG
+            "${options}"
+            "${singles}"
+            "${multiples}"
+            ${ARGN})
+
+        if(NOT ARG_TARGET)
+            message(FATAL_ERROR "No target specified for coverage")
+        endif()
+
+        message(STATUS "Coverage target: ${ARG_TARGET} with libraries: ${ARG_LIBRARIES} and excludes: ${ARG_EXCLUDES}")
+        get_target_property(EXEC_OUTPUT_DIRECTORY ${ARG_TARGET} RUNTIME_OUTPUT_DIRECTORY)
+        if (NOT EXEC_OUTPUT_DIRECTORY)
+            set(EXEC_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/CMakefiles/${ARG_TARGET}.dir/)
+        endif()
+        message(STATUS "Executable output directory for ${ARG_TARGET}: ${EXEC_OUTPUT_DIRECTORY}")
+        foreach(lib ${ARG_LIBRARIES})
+            get_target_property(LIBRARY_OUTPUT_DIRECTORY ${lib} LIBRARY_OUTPUT_DIRECTORY)
+            if (NOT LIBRARY_OUTPUT_DIRECTORY)
+                set(LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/CMakefiles/${lib}.dir/)
+            endif()
+            message(STATUS "Library output directory for ${lib}: ${LIBRARY_OUTPUT_DIRECTORY}")
+            list(APPEND LIBRARIES_COVERAGE_PATH ${LIBRARY_OUTPUT_DIRECTORY})
+            get_target_property(_SOURCES ${lib} SOURCES)
+            list(APPEND LIBRARIES_SOURCES ${_SOURCES})
+        endforeach()
+        message(STATUS "Libraries coverage path: ${LIBRARIES_COVERAGE_PATH}")
+        message(STATUS "Libraries sources: ${LIBRARIES_SOURCES}")
+
+        # set(LLVM_PROFILE_FILE "${TARGET}.profraw")
+        add_custom_target(coverage-${ARG_TARGET}
+            DEPENDS ${ARG_TARGET}
+            COMMAND ${LLVM_PROFDATA} merge -sparse $<TARGET_FILE:${ARG_TARGET}>.profraw -o $<TARGET_FILE:${ARG_TARGET}>.profdata
+            COMMAND ${LLVM_COV} show   $<TARGET_FILE:${ARG_TARGET}> --color --sources ${LIBRARIES_SOURCES} -instr-profile=$<TARGET_FILE:${ARG_TARGET}>.profdata --format=html -output-dir=${CMAKE_BINARY_DIR}/coverage/coverage-${ARG_TARGET}
+            COMMAND ${LLVM_COV} report $<TARGET_FILE:${ARG_TARGET}> --color --sources ${LIBRARIES_SOURCES} -instr-profile=$<TARGET_FILE:${ARG_TARGET}>.profdata
+            COMMAND ${LLVM_COV} export $<TARGET_FILE:${ARG_TARGET}> --color --sources ${LIBRARIES_SOURCES} -instr-profile=$<TARGET_FILE:${ARG_TARGET}>.profdata -format=lcov > $<TARGET_FILE:${ARG_TARGET}>.info
+            COMMAND ${GENHTML} $<TARGET_FILE:${ARG_TARGET}>.info -o ${CMAKE_BINARY_DIR}/coverage/coverage-${ARG_TARGET}
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        )
+        if (NOT TARGET coverage)
+            add_custom_target(coverage)
+        endif()
+        add_dependencies(coverage coverage-${ARG_TARGET})
+    endfunction()
+
+    coverage_target(TARGET hypha_ip_test
+                    LIBRARIES lib-hypha-ip
+                    EXCLUDES hypha_ip_test)
+
+endif()
