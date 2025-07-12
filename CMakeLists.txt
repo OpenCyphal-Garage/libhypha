@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.31.0)
 
-project(HyphaIP LANGUAGES C VERSION 0.1.0)
+project(HyphaIp LANGUAGES C VERSION 0.1.0)
 enable_testing()
 include(FetchContent)
 
@@ -14,15 +14,15 @@ option(BUILD_ANALYSIS "Builds with static analysis support" ON)
 ###############################################################
 # Interface Libraries
 ###############################################################
-add_library(hypha_ip_defs INTERFACE)
-target_compile_definitions(hypha_ip_defs INTERFACE
+add_library(hypha-ip-defs INTERFACE)
+target_compile_definitions(hypha-ip-defs INTERFACE
     HYPHA_IP_TTL=128
     HYPHA_IP_MTU=1500
     $<$<BOOL:${BUILD_UNIT_TESTS}>:HYPHA_IP_UNIT_TEST=1>
 )
 
-add_library(hypha_ip_rules INTERFACE)
-target_compile_options(hypha_ip_rules
+add_library(hypha-ip-rules INTERFACE)
+target_compile_options(hypha-ip-rules
     INTERFACE
         -Wall -Werror -Wextra -Wconversion -Wformat=2 -Wshadow
         -Wunused-parameter -Wunused-variable -Wstrict-prototypes -Wredundant-decls
@@ -38,7 +38,7 @@ target_compile_options(hypha_ip_rules
         $<$<AND:$<BOOL:${BUILD_ANALYSIS}>,$<C_COMPILER_ID:AppleClang>>:-Xclang -analyzer-output=text>
         $<$<AND:$<BOOL:${BUILD_COVERAGE}>,$<C_COMPILER_ID:AppleClang>>:-fprofile-instr-generate -fprofile-arcs -ftest-coverage -fcoverage-mapping>
 )
-target_link_libraries(hypha_ip_rules INTERFACE
+target_link_libraries(hypha-ip-rules INTERFACE
     $<$<BOOL:${BUILD_COVERAGE}>:--coverage>
 )
 
@@ -59,17 +59,25 @@ set(HYPHA_IP_SOURCE
     ${CMAKE_SOURCE_DIR}/source/hypha_print.c
     ${CMAKE_SOURCE_DIR}/source/hypha_flip.c
 )
-add_library(lib-hypha-ip
+add_library(hypha-ip
     ${HYPHA_IP_SOURCE}
 )
-target_include_directories(lib-hypha-ip PUBLIC
-    ${CMAKE_SOURCE_DIR}/include
+target_include_directories(hypha-ip PUBLIC
+    # Generated Tree
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+    # Build Tree
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    # Install Tree
+    $<INSTALL_INTERFACE:include>
 )
-target_include_directories(lib-hypha-ip PRIVATE
+target_include_directories(hypha-ip PRIVATE
     ${CMAKE_SOURCE_DIR}/source/include
 )
-target_link_libraries(lib-hypha-ip PUBLIC hypha_ip_defs hypha_ip_rules)
-set_target_properties(lib-hypha-ip PROPERTIES
+# DO force our COMPILE DEFS on customers when they link against us so we are the same
+target_link_libraries(hypha-ip PUBLIC hypha-ip-defs)
+# Don't force our build flags on customers when they link against us
+target_link_libraries(hypha-ip PRIVATE hypha-ip-rules)
+set_target_properties(hypha-ip PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
     PUBLIC_HEADER "${CMAKE_SOURCE_DIR}/include/hypha_ip.h"
@@ -86,40 +94,43 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(unity)
 # Unit Test
-add_executable(hypha_ip_test)
-# target_link_libraries(hypha_ip_test PRIVATE lib-hypha-ip)
-target_sources(hypha_ip_test PRIVATE
+add_executable(hypha-ip-test)
+# target_link_libraries(hypha-ip-test PRIVATE hypha-ip)
+target_sources(hypha-ip-test PRIVATE
     ${CMAKE_SOURCE_DIR}/tests/hypha_test.c
     ${CMAKE_SOURCE_DIR}/tests/unity_main.c
 )
-target_include_directories(hypha_ip_test PUBLIC
+target_include_directories(hypha-ip-test PUBLIC
     ${CMAKE_SOURCE_DIR}/include
 )
-target_include_directories(hypha_ip_test PRIVATE
+target_include_directories(hypha-ip-test PRIVATE
     ${CMAKE_SOURCE_DIR}/source/include
 )
-target_link_libraries(hypha_ip_test PRIVATE lib-hypha-ip unity)
-target_link_libraries(hypha_ip_test INTERFACE hypha_ip_defs hypha_ip_rules)
+target_link_libraries(hypha-ip-test PRIVATE hypha-ip unity)
+target_link_libraries(hypha-ip-test INTERFACE hypha-ip-defs hypha-ip-rules)
 
 add_test(NAME HyphaIpUnityTest
-         COMMAND hypha_ip_test
+         COMMAND hypha-ip-test
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 if (BUILD_COVERAGE)
 set_tests_properties(HyphaIpUnityTest PROPERTIES
-    ENVIRONMENT LLVM_PROFILE_FILE=$<TARGET_FILE:hypha_ip_test>.profraw
+    ENVIRONMENT LLVM_PROFILE_FILE=$<TARGET_FILE:hypha-ip-test>.profraw
 )
 endif()
 
 ###############################################################
 # Example Application
 ###############################################################
-add_executable(hypha_ip_example
+add_executable(hypha-ip-example
     ${CMAKE_SOURCE_DIR}/examples/hypha_ip_lifecycle.c
 )
-target_link_libraries(hypha_ip_example PRIVATE lib-hypha-ip)
-target_link_libraries(hypha_ip_example INTERFACE hypha_ip_defs hypha_ip_rules)
+target_link_libraries(hypha-ip-example PRIVATE hypha-ip)
+target_link_libraries(hypha-ip-example INTERFACE hypha-ip-defs hypha-ip-rules)
 endif(BUILD_UNIT_TESTS)
 
+###############################################################
+# Coverage Support
+###############################################################
 if (BUILD_COVERAGE)
     find_program(LLVM_PROFDATA llvm-profdata)
     find_program(LLVM_COV llvm-cov)
@@ -180,8 +191,33 @@ if (BUILD_COVERAGE)
         add_dependencies(coverage coverage-${ARG_TARGET})
     endfunction()
 
-    coverage_target(TARGET hypha_ip_test
-                    LIBRARIES lib-hypha-ip
-                    EXCLUDES hypha_ip_test)
+    coverage_target(TARGET hypha-ip-test
+                    LIBRARIES hypha-ip
+                    EXCLUDES hypha-ip-test)
 
 endif()
+
+#####################
+# EXPORTS
+#####################
+
+# Declare installs and exports
+install(TARGETS hypha-ip hypha-ip-rules hypha-ip-defs EXPORT HyphaIpTargets
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin
+    INCLUDES DESTINATION include
+)
+install(EXPORT HyphaIpTargets
+    FILE HyphaIpTargets.cmake
+    NAMESPACE HyphaIp::
+    DESTINATION share/cmake/${PROJECT_NAME}
+)
+install(DIRECTORY include/hypha_ip
+    DESTINATION include
+    PATTERN "*.h"
+    PERMISSIONS WORLD_READ GROUP_READ OWNER_READ
+)
+install(FILES "cmake/Find${PROJECT_NAME}.cmake" "cmake/${PROJECT_NAME}-config.cmake"
+    DESTINATION share/cmake/${PROJECT_NAME}
+)

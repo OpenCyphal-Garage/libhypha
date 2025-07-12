@@ -54,9 +54,17 @@ Users can statically configure Hypha IP in several regards
 
 ## Building
 
+You can _optionally_ add a `CMAKE_INSTALL_PREFIX` to indicate where you'd like to install the headers, libs, cmake, etc.
+
 ```bash
-cmake -B build -S .
+cmake -B build -S . -DCMAKE_INSTALL_PREFIX=../install
 cmake --build build --target all
+```
+
+## Installing
+
+```bash
+cmake --build build --target install
 ```
 
 ### Testing
