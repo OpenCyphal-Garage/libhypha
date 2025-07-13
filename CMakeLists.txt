@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.31.0)
 
-project(HyphaIp LANGUAGES C VERSION 0.1.0)
+project(HyphaIp LANGUAGES C VERSION 0.2.0)
 enable_testing()
 include(FetchContent)
 
