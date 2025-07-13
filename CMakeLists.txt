@@ -107,7 +107,7 @@ target_include_directories(hypha-ip-test PRIVATE
     ${CMAKE_SOURCE_DIR}/source/include
 )
 target_link_libraries(hypha-ip-test PRIVATE hypha-ip unity)
-target_link_libraries(hypha-ip-test INTERFACE hypha-ip-defs hypha-ip-rules)
+target_link_libraries(hypha-ip-test PRIVATE hypha-ip-defs hypha-ip-rules)
 
 add_test(NAME HyphaIpUnityTest
          COMMAND hypha-ip-test
