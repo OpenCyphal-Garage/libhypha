@@ -125,7 +125,7 @@ add_executable(hypha-ip-example
     ${CMAKE_SOURCE_DIR}/examples/hypha_ip_lifecycle.c
 )
 target_link_libraries(hypha-ip-example PRIVATE hypha-ip)
-target_link_libraries(hypha-ip-example INTERFACE hypha-ip-defs hypha-ip-rules)
+target_link_libraries(hypha-ip-example PRIVATE hypha-ip-defs hypha-ip-rules)
 endif(BUILD_UNIT_TESTS)
 
 ###############################################################
