@@ -1,5 +1,5 @@
 # Uncomment this if your project is hosted on GitHub:
-# github_url = "https://github.com/<user or organization>/<project>/"
+github_url = "https://github.com/OpenCyphal-Garage/libhypha"
 
 [version]
 current = "0.2.0"
@@ -29,9 +29,9 @@ src = "CMakeLists.txt"
 # run after the files have been patched
 # and before the git commit is made
 
-#  [[before_commit]]
-#  name = "check changelog"
-#  cmd = "grep -q {new_version} Changelog.rst"
+[[before_commit]]
+name = "check changelog"
+cmd = "grep -q {new_version} ChangeLog.md"
 
 # Or run some commands after the git tag and the branch
 # have been pushed:

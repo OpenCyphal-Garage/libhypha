@@ -25,6 +25,10 @@ Hypha IP is a tiny IP stack coded in C17/C23 which seeks to implement the _bare_
 * ICMP Echo/Response (incomplete)
 * VLAN Tagging (incomplete)
 
+## Future Features
+
+* IPv6
+
 ## User Requirements
 
 Users will simply need to provide a set of functions with the following features:
