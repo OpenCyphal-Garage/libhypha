@@ -25,6 +25,10 @@ Hypha IP is a tiny IP stack coded in C17/C23 which seeks to implement the _bare_
 * ICMP Echo/Response (incomplete)
 * VLAN Tagging (incomplete)
 
+## Future Features
+
+* IPv6
+
 ## User Requirements
 
 Users will simply need to provide a set of functions with the following features:
@@ -54,9 +58,17 @@ Users can statically configure Hypha IP in several regards
 
 ## Building
 
+You can _optionally_ add a `CMAKE_INSTALL_PREFIX` to indicate where you'd like to install the headers, libs, cmake, etc.
+
 ```bash
-cmake -B build -S .
+cmake -B build -S . -DCMAKE_INSTALL_PREFIX=../install
 cmake --build build --target all
+```
+
+## Installing
+
+```bash
+cmake --build build --target install
 ```
 
 ### Testing
